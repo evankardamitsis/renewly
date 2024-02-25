@@ -2,13 +2,18 @@ import '@mantine/core/styles.css';
 import React from 'react';
 import { MantineProvider, ColorSchemeScript } from '@mantine/core';
 import { theme } from '@/theme';
-import {CustomLayout} from "@/app/components/CustomLayout";
 import "./globals.css";
+import { Nunito } from "next/font/google"
 import {ClerkProvider} from "@clerk/nextjs";
 import {Metadata} from "next";
 import { Toaster}  from "react-hot-toast";
 import '@mantine/dates/styles.css';
 import {TasksProvider} from "@/app/providers/TasksProvider";
+
+const nunito = Nunito({
+    weight: ["400", "500", "600", "700", "800"],
+    subsets: ["latin"]
+})
 
 export const metadata: Metadata = {
     title: "Create Next App",
@@ -17,17 +22,6 @@ export const metadata: Metadata = {
 
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-    const allTasks = async () => {
-        const res = await fetch('/api/tasks', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-
-        const data = await res.json();
-        console.log('data', data);
-    }
 
     return (
       <ClerkProvider>

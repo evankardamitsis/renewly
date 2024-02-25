@@ -6,6 +6,8 @@ import React, {useEffect, useState} from "react";
 import {ColorSchemeToggle} from "@/app/components/ColorSchemeToggle/ColorSchemeToggle";
 import Sidebar from "@/app/components/Sidebar/Sidebar";
 import {UserButton} from "@clerk/nextjs";
+import axios from "axios";
+import toast from "react-hot-toast";
 
 interface CustomLayoutProps {
     children?: React.ReactNode;

@@ -6,6 +6,9 @@ import {CustomLayout} from "@/app/components/CustomLayout";
 import "./globals.css";
 import {ClerkProvider} from "@clerk/nextjs";
 import {Metadata} from "next";
+import { Toaster}  from "react-hot-toast";
+import '@mantine/dates/styles.css';
+import {TasksProvider} from "@/app/providers/TasksProvider";
 
 export const metadata: Metadata = {
     title: "Create Next App",
@@ -14,6 +17,17 @@ export const metadata: Metadata = {
 
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+    const allTasks = async () => {
+        const res = await fetch('/api/tasks', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await res.json();
+        console.log('data', data);
+    }
 
     return (
       <ClerkProvider>
@@ -28,7 +42,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </head>
               <body>
               <MantineProvider theme={theme}>
+                  <TasksProvider>
+                      <Toaster />
                       {children}
+                  </TasksProvider>
               </MantineProvider>
               </body>
         </html>

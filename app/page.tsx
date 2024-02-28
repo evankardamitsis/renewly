@@ -10,7 +10,7 @@ export default function Home() {
 
   return (
       <CustomLayout>
-          <Tasks title="All Tasks" tasks={tasks} />
+          <Tasks title="All tasks" tasks={tasks} />
       </CustomLayout>
 
   );

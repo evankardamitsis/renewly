@@ -3,49 +3,75 @@
 import React from 'react';
 import {Badge, Card, Flex, Pill, SimpleGrid, Stack, Text, Title} from "@mantine/core";
 import {IconPencil, IconTrash} from "@tabler/icons-react";
-import dayjs from "dayjs";
 import {formatDate} from "@/app/utils/common";
-import CreateTaskCard from "@/app/components/CreateTaskCard/CreateTaskCard";
+import {useTasks} from "@/app/providers/TasksProvider";
 
 
 interface Props {
-    task: any;
+    title: string;
+    description: string;
+    date: string;
+    isCompleted: boolean;
+    id: string;
 }
 
-const TaskItem = ({task}:Props) => {
+const TaskItem = ({ title, description, date, isCompleted, id }: Props) => {
 
-    const formattedDate = formatDate(task.date);
+    const {deleteTask, updateTask} = useTasks();
+
+    const formattedDate = formatDate(date);
+
 
     return (
-        <SimpleGrid
-            cols={{ base: 1, sm: 2, lg: 4}}
-            spacing={{ base: 10, sm: 'xl' }}
-            verticalSpacing={{ base: 'md', sm: 'xl' }}
-        >
-                <Card key={task.id} radius="lg" shadow="xs">
+                <Card key={id} radius="lg" shadow="xs">
                     <Stack gap="lg">
                             <Flex justify="space-between" align="center">
-                                <Title order={3}>{task.title}</Title>
+                                <Title order={3}>{title}</Title>
                                 <Flex gap={8}>
-                                   <IconPencil />
-                                   <IconTrash />
+                                   <IconPencil className="cursor-pointer"  />
+                                   <IconTrash className="cursor-pointer" onClick={() => {deleteTask(id)}} />
                                 </Flex>
                             </Flex>
-                                <Text>{task.description}</Text>
+                                <Text>{description}</Text>
                                 <Text>{formattedDate}</Text>
                                 <Flex className="cursor-pointer">
-                                    {task.isCompleted ? (
-                                        <Badge p="sm" bg="green" size="md">Completed</Badge>
+                                    {isCompleted ? (
+                                        <Badge
+                                            p="sm"
+                                            bg="green"
+                                            size="md"
+                                            onClick={() => {
+                                                const task = {
+                                                    id,
+                                                    isCompleted: !isCompleted,
+                                                };
+
+                                                updateTask(task);
+                                            }}
+                                        >
+                                            Completed
+                                        </Badge>
                                         ) :
-                                        <Badge p="sm" bg="red" size="md">Incomplete</Badge>
+                                        <Badge
+                                            p="sm"
+                                            bg="red"
+                                            size="md"
+                                            onClick={() => {
+                                                const task = {
+                                                    id,
+                                                    isCompleted: !isCompleted,
+                                                }
+                                                updateTask(task);
+                                            }}
+                                        >
+                                            Incomplete
+                                        </Badge>
                                     }
                                 </Flex>
                             <Flex>
                         </Flex>
                     </Stack>
                 </Card>
-            <CreateTaskCard />
-        </SimpleGrid>
     );
 };
 

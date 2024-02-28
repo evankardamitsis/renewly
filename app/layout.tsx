@@ -6,9 +6,8 @@ import "./globals.css";
 import { Nunito } from "next/font/google"
 import {ClerkProvider} from "@clerk/nextjs";
 import {Metadata} from "next";
-import { Toaster}  from "react-hot-toast";
 import '@mantine/dates/styles.css';
-import {TasksProvider} from "@/app/providers/TasksProvider";
+import ContextProvider from "@/app/providers/ContextProvider";
 
 const nunito = Nunito({
     weight: ["400", "500", "600", "700", "800"],
@@ -36,10 +35,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </head>
               <body>
               <MantineProvider theme={theme}>
-                  <TasksProvider>
-                      <Toaster />
-                      {children}
-                  </TasksProvider>
+                  <ContextProvider>
+                        {children}
+                  </ContextProvider>
               </MantineProvider>
               </body>
         </html>

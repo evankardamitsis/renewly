@@ -6,13 +6,21 @@ import {useForm} from "@mantine/form";
 import {DateInput} from "@mantine/dates";
 import axios from "axios";
 import toast from "react-hot-toast";
+import {useTasks} from "@/app/providers/TasksProvider";
 
-const CreateContent = () => {
+interface Props {
+    onClose: () => void;
+}
+
+const CreateContent = ({onClose}: Props) => {
     const [title, setTitle] = useState('')
     const [description, setDescription] = useState('')
     const [date, setDate] = useState<Date | null>(null)
     const [completed, setCompleted] = useState(false)
     const [important, setImportant] = useState(false)
+
+    const { allTasks } = useTasks();
+
 
     const form = useForm({
         initialValues: {
@@ -68,15 +76,16 @@ const CreateContent = () => {
             }
 
             toast.success('Task created successfully')
+            await allTasks();
+            onClose();
         } catch (error) {
             toast.error('Error creating task');
             console.log('error creating task', error)
         }
     }
 
-
     return (
-        <div>
+        <Stack>
             <Title order={3}>Create a task</Title>
             <form onSubmit={handleSubmit}>
                 <Stack w={400} my="xl" gap="lg">
@@ -110,7 +119,7 @@ const CreateContent = () => {
                     <Button type="submit">Create Task</Button>
                 </Stack>
             </form>
-        </div>
+        </Stack>
 );
 };
 

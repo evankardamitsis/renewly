@@ -3,19 +3,14 @@
 import Tasks from "@/app/components/Tasks/Tasks";
 import {CustomLayout} from "@/app/components/CustomLayout";
 import {useTasks} from "@/app/providers/TasksProvider";
-import {useEffect} from "react";
 
 export default function Home() {
 
-    const { tasks, isLoading, allTasks } = useTasks();
-
-    useEffect(() => {
-        allTasks();
-    }, []);
+    const { tasks, } = useTasks();
 
   return (
       <CustomLayout>
-          <Tasks  />
+          <Tasks title="All Tasks" tasks={tasks} />
       </CustomLayout>
 
   );

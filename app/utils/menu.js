@@ -10,13 +10,13 @@ const menu = [
     },
     {
         id: 2,
-        title: "Important!",
+        title: "Important",
         icon: <IconRadioactiveFilled />,
         link: "/important",
     },
     {
         id: 3,
-        title: "Completed!",
+        title: "Completed",
         icon: <IconClipboardCheck />,
         link: "/completed",
     },

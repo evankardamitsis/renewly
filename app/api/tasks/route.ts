@@ -41,41 +41,28 @@ export async function POST(req: Request) {
 
 export async function GET(req: Request) {
     try {
-        const {userId} = auth()
+        const {userId} = auth();
 
-        if(!userId) {
+        if (!userId) {
             return NextResponse.json({error: 'user not authenticated'}, {status: 401});
         }
 
+        const url = new URL(req.url);
+        const isCompleted = url.searchParams.get('completed') === 'true';
+
+        const whereClause = {
+            userId,
+            ...(isCompleted ? { isCompleted: true } : {}),
+        };
+
         const tasks = await prisma.task.findMany({
-            where: {
-                userId
-            }
+            where: whereClause
         });
 
         return NextResponse.json(tasks);
-
     } catch (error) {
         console.log('error getting tasks', error);
-        return  NextResponse.json({error: 'error getting tasks'}, {status: 500});
-    }
-}
-
-export async function PUT(req: Request) {
-    try {
-
-    } catch (error) {
-        console.log('error updating task', error);
-        return  NextResponse.json({error: 'error updating task'}, {status: 500});
-    }
-}
-
-export async function DELETE(req: Request) {
-    try {
-
-    } catch (error) {
-        console.log('error deleting task', error);
-        return  NextResponse.json({error: 'error deleting task'}, {status: 500});
+        return NextResponse.json({error: 'error getting tasks'}, {status: 500});
     }
 }
 

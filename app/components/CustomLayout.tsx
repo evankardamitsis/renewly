@@ -1,13 +1,11 @@
 'use client'
 
-import {AppShell, Burger, Flex, Group, Skeleton, Text} from '@mantine/core';
+import {AppShell, Burger, Flex, Group, Text} from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import React, {useEffect, useState} from "react";
 import {ColorSchemeToggle} from "@/app/components/ColorSchemeToggle/ColorSchemeToggle";
 import Sidebar from "@/app/components/Sidebar/Sidebar";
 import {UserButton} from "@clerk/nextjs";
-import axios from "axios";
-import toast from "react-hot-toast";
 
 interface CustomLayoutProps {
     children?: React.ReactNode;
@@ -48,7 +46,9 @@ export const CustomLayout: React.FC<CustomLayoutProps> = ({ children }) => {
                 <Sidebar />
             </AppShell.Navbar>
             <AppShell.Main className="w-full">
-                {children}
+                <>
+                    {children}
+                </>
             </AppShell.Main>
         </AppShell>
     );

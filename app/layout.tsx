@@ -4,10 +4,8 @@ import { MantineProvider, ColorSchemeScript } from '@mantine/core';
 import { theme } from '@/theme';
 import "./globals.css";
 import { Nunito } from "next/font/google"
-import {ClerkProvider} from "@clerk/nextjs";
 import {Metadata} from "next";
 import '@mantine/dates/styles.css';
-import ContextProvider from "@/app/providers/ContextProvider";
 
 const nunito = Nunito({
     weight: ["400", "500", "600", "700", "800"],

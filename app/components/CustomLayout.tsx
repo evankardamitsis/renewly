@@ -5,7 +5,7 @@ import { useDisclosure } from '@mantine/hooks';
 import React, {useEffect, useState} from "react";
 import {ColorSchemeToggle} from "@/app/components/ColorSchemeToggle/ColorSchemeToggle";
 import Sidebar from "@/app/components/Sidebar/Sidebar";
-import {UserButton} from "@clerk/nextjs";
+import {UserButton, useUser} from "@clerk/nextjs";
 
 interface CustomLayoutProps {
     children?: React.ReactNode;
@@ -14,6 +14,9 @@ interface CustomLayoutProps {
 export const CustomLayout: React.FC<CustomLayoutProps> = ({ children }) => {
     const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
     const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true);
+
+    const { user } = useUser();
+    const firstName = user?.firstName;
 
     return (
         <AppShell
@@ -36,8 +39,8 @@ export const CustomLayout: React.FC<CustomLayoutProps> = ({ children }) => {
                     </Flex>
                     {/*//right aligned items*/}
                     <Flex justify="flex-end" align="center" gap="lg">
+                       Hello {firstName} <UserButton />
                         <ColorSchemeToggle />
-                        <UserButton />
                     </Flex>
                 </Group>
 

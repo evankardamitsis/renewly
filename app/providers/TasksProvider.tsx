@@ -58,7 +58,7 @@ export const TasksProvider: React.FC<TasksProviderProps> = ({ children }) => {
             setTasks(sortedTasks);
         } catch (error) {
             console.error(error);
-            toast.error('Error getting tasks');
+            toast.error('Error getting dashboard');
         } finally {
             setIsLoading(false);
         }

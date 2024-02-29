@@ -5,12 +5,14 @@ import {CustomLayout} from "@/app/components/CustomLayout";
 import {useTasks} from "@/app/providers/TasksProvider";
 import {Title} from "@mantine/core";
 
-export default function Home() {
+export default function Dashboard() {
 
-  return (
-      <CustomLayout>
-          <Title>I am the landing page</Title>
-      </CustomLayout>
+    const { tasks, } = useTasks();
 
-  );
+    return (
+        <CustomLayout>
+            <Title>I am the dashboard page</Title>
+        </CustomLayout>
+
+    );
 }

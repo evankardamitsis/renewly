@@ -61,8 +61,8 @@ export async function GET(req: Request) {
 
         return NextResponse.json(tasks);
     } catch (error) {
-        console.log('error getting tasks', error);
-        return NextResponse.json({error: 'error getting tasks'}, {status: 500});
+        console.log('error getting dashboard', error);
+        return NextResponse.json({error: 'error getting dashboard'}, {status: 500});
     }
 }
 

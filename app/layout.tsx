@@ -23,7 +23,6 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
 
     return (
-      <ClerkProvider>
           <html lang="en">
               <head>
                 <ColorSchemeScript />
@@ -35,12 +34,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </head>
               <body>
               <MantineProvider theme={theme}>
-                  <ContextProvider>
                         {children}
-                  </ContextProvider>
               </MantineProvider>
               </body>
         </html>
-      </ClerkProvider>
   );
 }

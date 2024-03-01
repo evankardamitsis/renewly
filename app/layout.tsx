@@ -4,10 +4,8 @@ import { MantineProvider, ColorSchemeScript } from '@mantine/core';
 import { theme } from '@/theme';
 import "./globals.css";
 import { Nunito } from "next/font/google"
-import {ClerkProvider} from "@clerk/nextjs";
 import {Metadata} from "next";
 import '@mantine/dates/styles.css';
-import ContextProvider from "@/app/providers/ContextProvider";
 
 const nunito = Nunito({
     weight: ["400", "500", "600", "700", "800"],
@@ -23,7 +21,6 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
 
     return (
-      <ClerkProvider>
           <html lang="en">
               <head>
                 <ColorSchemeScript />
@@ -35,12 +32,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </head>
               <body>
               <MantineProvider theme={theme}>
-                  <ContextProvider>
                         {children}
-                  </ContextProvider>
               </MantineProvider>
               </body>
         </html>
-      </ClerkProvider>
   );
 }

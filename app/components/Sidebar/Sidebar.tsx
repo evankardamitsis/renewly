@@ -22,11 +22,14 @@ const Sidebar = () => {
         await signOut();
     };
 
+    // Check if current path starts with '/tasks'
+    const isTasksPage = pathname.includes('/tasks');
+
     return (
         <div className="flex flex-col h-full w-[15rem] rounded-xl border border-amber-300 p-4 shadow-xs">
             <Stack gap="lg">
                     <Stack my="lg">
-                        {tasksmenu.map((item) => (
+                        {isTasksPage && tasksmenu.map((item) => (
                             <Flex
                                 key={item.id}
                                 onClick={() => handleClick(item.link)}

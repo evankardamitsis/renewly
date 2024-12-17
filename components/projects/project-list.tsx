@@ -1,40 +1,53 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Project } from "@/types/project"
-import { ProjectModal } from "./project-modal"
-import { Button } from "../ui/button"
-import { Plus } from "lucide-react"
-import { Card, CardHeader, CardTitle, CardContent } from "../ui/card"
-import { cn } from "@/lib/utils"
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Project } from "@/types/project";
+import { ProjectModal } from "./project-modal";
+import { Button } from "../ui/button";
+import { Plus } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
+import { generateSlug } from "@/utils/slug";
 
 interface ProjectListProps {
-  projects: Project[]
-  selectedProjectId?: string
-  onProjectSelect: (projectId: string) => void
-  onProjectCreate: (project: Project) => void
-  onProjectUpdate: (project: Project) => void
+  projects: Project[];
+  onProjectCreate: (project: Project) => void;
+  onProjectUpdate: (project: Project) => void;
 }
 
 export function ProjectList({
   projects,
-  selectedProjectId,
-  onProjectSelect,
   onProjectCreate,
   onProjectUpdate,
 }: ProjectListProps) {
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingProject, setEditingProject] = useState<Project | undefined>()
+  const router = useRouter();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | undefined>();
 
-  const handleProjectSave = (project: Project) => {
+  const handleProjectSave = (
+    project: Omit<Project, "status" | "dueDate" | "slug">
+  ) => {
+    const now = new Date().toISOString();
+    const completeProject: Project = {
+      ...project,
+      slug: generateSlug(project.name),
+      status: editingProject?.status || "Planning",
+      dueDate:
+        editingProject?.dueDate ||
+        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      createdAt: editingProject?.createdAt || now,
+      updatedAt: now,
+      tasks: editingProject?.tasks || [],
+    };
+
     if (editingProject) {
-      onProjectUpdate(project)
+      onProjectUpdate(completeProject);
     } else {
-      onProjectCreate(project)
+      onProjectCreate(completeProject);
     }
-    setIsModalOpen(false)
-    setEditingProject(undefined)
-  }
+    setIsModalOpen(false);
+    setEditingProject(undefined);
+  };
 
   return (
     <div className="space-y-4">
@@ -50,17 +63,16 @@ export function ProjectList({
         {projects.map((project) => (
           <Card
             key={project.id}
-            className={cn(
-              "cursor-pointer hover:bg-accent transition-colors",
-              selectedProjectId === project.id && "border-primary"
-            )}
-            onClick={() => onProjectSelect(project.id)}
+            className="cursor-pointer hover:bg-accent transition-colors"
+            onClick={() => router.push(`/projects/${project.slug}`)}
           >
             <CardHeader className="p-4">
               <CardTitle className="text-lg">{project.name}</CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              <p className="text-sm text-muted-foreground">{project.description}</p>
+              <p className="text-sm text-muted-foreground">
+                {project.description}
+              </p>
               <div className="mt-2 text-sm text-muted-foreground">
                 {project.tasks.length} tasks
               </div>
@@ -72,12 +84,12 @@ export function ProjectList({
       <ProjectModal
         isOpen={isModalOpen}
         onClose={() => {
-          setIsModalOpen(false)
-          setEditingProject(undefined)
+          setIsModalOpen(false);
+          setEditingProject(undefined);
         }}
         onSave={handleProjectSave}
         project={editingProject}
       />
     </div>
-  )
-} 
+  );
+}

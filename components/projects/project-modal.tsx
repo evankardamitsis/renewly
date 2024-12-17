@@ -1,40 +1,48 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog"
-import { Button } from "../ui/button"
-import { Input } from "../ui/input"
-import { Textarea } from "../ui/textarea"
-import { Project } from "@/types/project"
+import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Textarea } from "../ui/textarea";
+import { Project } from "@/types/project";
 
 interface ProjectModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onSave: (project: Project) => void
-  project?: Project
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (project: Omit<Project, "status" | "dueDate">) => void;
+  project?: Project;
 }
 
-export function ProjectModal({ isOpen, onClose, onSave, project }: ProjectModalProps) {
-  const [name, setName] = useState(project?.name || "")
-  const [description, setDescription] = useState(project?.description || "")
+export function ProjectModal({
+  isOpen,
+  onClose,
+  onSave,
+  project,
+}: ProjectModalProps) {
+  const [name, setName] = useState(project?.name || "");
+  const [description, setDescription] = useState(project?.description || "");
 
   const handleSave = () => {
-    const updatedProject: Project = {
+    const updatedProject = {
       id: project?.id || Date.now().toString(),
       name,
       description,
       createdAt: project?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      tasks: project?.tasks || []
-    }
-    onSave(updatedProject)
-  }
+      tasks: project?.tasks || [],
+      slug: project?.slug || name.toLowerCase().replace(/\s+/g, "-"),
+    };
+    onSave(updatedProject);
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{project ? "Edit Project" : "Create New Project"}</DialogTitle>
+          <DialogTitle>
+            {project ? "Edit Project" : "Create New Project"}
+          </DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
@@ -59,5 +67,5 @@ export function ProjectModal({ isOpen, onClose, onSave, project }: ProjectModalP
         </div>
       </DialogContent>
     </Dialog>
-  )
-} 
+  );
+}

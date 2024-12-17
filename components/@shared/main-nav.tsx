@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
-  ListTodo,
   Calendar,
   Settings,
   MessageSquare,
@@ -23,11 +22,6 @@ const items = [
     title: "Projects",
     href: "/projects",
     icon: Folder,
-  },
-  {
-    title: "Tasks",
-    href: "/tasks",
-    icon: ListTodo,
   },
   {
     title: "Calendar",

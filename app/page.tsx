@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Clock, Users } from "lucide-react";
-import { TaskModal } from "@/components/task-modal";
 import { Task } from "@/types/task";
-import { PerformanceCard } from "@/components/performance-card";
-import { ChatCard } from "@/components/chat-card";
-import { ActiveProjectsCard } from "@/components/active-projects-card";
-import { TeamManagementCard } from "@/components/team-management-card";
+import { PerformanceCard } from "@/components/dashboard/performance-card";
+import { ChatCard } from "@/components/dashboard/chat-card";
+import { ActiveProjectsCard } from "@/components/dashboard/active-projects-card";
+import { TeamManagementCard } from "@/components/team-management/team-management-card";
+import { TaskModal } from "@/components/tasks/task-modal";
 
 export default function DashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);

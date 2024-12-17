@@ -1,16 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { TaskBoard } from "@/components/task-board";
-import { TaskTable } from "@/components/task-table";
-import { TaskFilters } from "@/components/task-filters";
+import { TaskBoard } from "@/components/tasks/task-board";
+import { TaskTable } from "@/components/tasks/task-table";
+import { TaskFilters } from "@/components/tasks/task-filters";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Plus } from "lucide-react";
 import { Task } from "@/types/task";
-import { TaskModal } from "@/components/task-modal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TaskModal } from "@/components/tasks/task-modal";
 
 // Sample data
 const initialTasks: Task[] = [

@@ -10,11 +10,11 @@ import {
   SheetTrigger,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { MainNav } from "@/components/main-nav";
+import { MainNav } from "@/components/@shared/main-nav";
 import { Mic, Bell, Folder, ChevronDown, LayoutGrid, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/ui/sidebar";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { ThemeToggle } from "@/components/@shared/theme-toggle";
 
 export function Header() {
   const [isSearchFocused, setIsSearchFocused] = useState(false);

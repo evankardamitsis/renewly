@@ -10,6 +10,7 @@ import {
   Settings,
   MessageSquare,
   BarChart,
+  Folder,
 } from "lucide-react";
 
 const items = [
@@ -17,6 +18,11 @@ const items = [
     title: "Dashboard",
     href: "/",
     icon: LayoutDashboard,
+  },
+  {
+    title: "Projects",
+    href: "/projects",
+    icon: Folder,
   },
   {
     title: "Tasks",

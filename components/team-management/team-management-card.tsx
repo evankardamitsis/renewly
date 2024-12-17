@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
-import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
-import { Button } from "./ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
-import { Input } from "./ui/input";
+import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
+import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
+import { Button } from "../ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Input } from "../ui/input";
 
 /**
  * Interface for team member data
@@ -18,11 +18,11 @@ interface TeamMember {
 
 /**
  * TeamManagementCard Component
- * 
+ *
  * A card-based interface for team member management.
  * Displays team members in a grid layout with avatar representations
  * and provides functionality to add new team members.
- * 
+ *
  * @returns {JSX.Element} Card component with team management interface
  */
 export function TeamManagementCard() {

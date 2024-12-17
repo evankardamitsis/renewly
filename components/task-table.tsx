@@ -19,8 +19,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { TaskModal } from "../../components/task-modal";
-import { TaskDetails } from "../../components/task-details";
+import { TaskModal } from "./task-modal";
+import { TaskDetails } from "./task-details";
 
 interface TaskTableProps {
   tasks: Task[];

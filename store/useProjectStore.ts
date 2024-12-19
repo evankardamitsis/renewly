@@ -1,6 +1,6 @@
 import { create } from "zustand"
-import { Project } from "@/types/project"
-import { Task } from "@/types/task"
+import { Project, Task } from "@/types/database"
+import { projectsApi, tasksApi } from "@/services/api"
 
 interface ProjectState {
   projects: Project[]
@@ -10,16 +10,16 @@ interface ProjectState {
   selectedProjectId: string | null
   // Actions
   setProjects: (projects: Project[]) => void
-  addProject: (project: Project) => void
-  updateProject: (project: Project) => void
+  addProject: (teamId: string, project: Partial<Project>) => Promise<void>
+  updateProject: (id: string, updates: Partial<Project>) => Promise<void>
   deleteProject: (id: string) => void
   setSelectedProject: (id: string | null) => void
   setLoading: (isLoading: boolean) => void
   setError: (error: string | null) => void
   getActiveProjects: () => Project[]
   setTasks: (tasks: Record<string, Task>) => void
-  addTask: (task: Task) => void
-  updateTask: (updatedTask: Task) => void
+  addTask: (projectId: string, task: Partial<Task>) => Promise<void>
+  updateTask: (id: string, updates: Partial<Task>) => Promise<void>
   deleteTask: (id: string) => void
 }
 
@@ -46,14 +46,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   tasks: {},
 
   setProjects: (projects) => set({ projects }),
-  addProject: (project) => 
-    set((state) => ({ projects: [...state.projects, project] })),
-  updateProject: (project) =>
+  addProject: async (teamId, project) => {
+    const newProject = await projectsApi.create(teamId, project)
+    set((state) => ({
+      projects: [...state.projects, newProject]
+    }))
+  },
+  updateProject: async (id, updates) => {
+    const updated = await projectsApi.update(id, updates)
     set((state) => ({
       projects: state.projects.map((p) => 
-        p.id === project.id ? project : p
-      ),
-    })),
+        p.id === id ? updated : p
+      )
+    }))
+  },
   deleteProject: (id) =>
     set((state) => ({
       projects: state.projects.filter((p) => p.id !== id),
@@ -68,16 +74,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     )
   },
   setTasks: (tasks) => set({ tasks }),
-  addTask: (task) => set((state) => ({ 
-    tasks: { ...state.tasks, [task.id]: task } 
-  })),
-  updateTask: (updatedTask) => {
+  addTask: async (projectId, task) => {
+    const newTask = await tasksApi.create(projectId, task)
+    set((state) => ({
+      tasks: { ...state.tasks, [newTask.id]: newTask }
+    }))
+  },
+  updateTask: async (id, updates) => {
+    const updated = await tasksApi.update(id, updates)
     set((state) => ({
       tasks: {
         ...state.tasks,
-        [updatedTask.id]: updatedTask,
-      },
-    }));
+        [id]: updated
+      }
+    }))
   },
   deleteTask: (id) => set((state) => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

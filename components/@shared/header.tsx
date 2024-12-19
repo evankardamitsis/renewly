@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -10,18 +10,76 @@ import {
   SheetTrigger,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { MainNav } from "@/components/@shared/main-nav";
-import { Mic, Bell, Folder, ChevronDown, LayoutGrid, Plus } from "lucide-react";
+import {
+  Mic,
+  Bell,
+  Folder,
+  LayoutGrid,
+  Plus,
+  LogOut,
+  User,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/@shared/theme-toggle";
+import { createClient } from "@/utils/supabase/client";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { toast } from "sonner";
+import { User as SupabaseUser } from "@supabase/supabase-js";
 
 export function Header() {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    // Get initial user
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleSignOut = async () => {
+    try {
+      setLoading(true);
+      const supabase = createClient();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      toast.success("Logged out successfully");
+      router.refresh();
+    } catch (error) {
+      toast.error("Error signing out");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const toggleSidebar = () => {
-    console.log("Toggling sidebar. Current state:", isSidebarOpen);
     setIsSidebarOpen(!isSidebarOpen);
   };
 
@@ -30,7 +88,7 @@ export function Header() {
       <div className="flex h-14 items-center px-4 md:px-6">
         <div className="flex items-center gap-6 md:gap-8">
           {/* Renewly Logo */}
-          <a href="/" className="flex items-center space-x-2">
+          <Link href="/" className="flex items-center space-x-2">
             <div className="size-8 rounded bg-primary/20">
               <div className="size-full rounded-sm bg-primary p-2 text-primary-foreground">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -44,7 +102,7 @@ export function Header() {
               </div>
             </div>
             <span className="font-bold text-xl">Renewly</span>
-          </a>
+          </Link>
 
           {/* Search */}
           <div className="relative flex-1 max-w-xl">
@@ -75,47 +133,89 @@ export function Header() {
         </div>
 
         <div className="ml-auto flex items-center gap-4">
-          {/* Add ThemeToggle before team section */}
           <ThemeToggle />
-          
-          {/* Team Section */}
-          <div className="flex items-center gap-2">
-            <div className="flex -space-x-2">
-              <Avatar className="border-2 border-background size-6">
-                <AvatarImage src="/placeholder.svg" />
-                <AvatarFallback>CM</AvatarFallback>
-              </Avatar>
-              <Avatar className="border-2 border-background size-6">
-                <AvatarImage src="/placeholder.svg" />
-                <AvatarFallback>SO</AvatarFallback>
-              </Avatar>
-            </div>
-            <Button variant="secondary" size="sm" className="h-7 text-xs gap-1">
-              <span>Team mate</span>
-              <Plus className="size-3" />
-            </Button>
-          </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon">
-              <Bell className="size-5" />
-            </Button>
-            <Button variant="ghost" size="icon">
-              <Folder className="size-5" />
-            </Button>
-          </div>
+          {user && (
+            <>
+              {/* Team Section */}
+              <div className="flex items-center gap-2">
+                <div className="flex -space-x-2">
+                  <Avatar className="border-2 border-background size-6">
+                    <AvatarImage src="/placeholder.svg" />
+                    <AvatarFallback>CM</AvatarFallback>
+                  </Avatar>
+                  <Avatar className="border-2 border-background size-6">
+                    <AvatarImage src="/placeholder.svg" />
+                    <AvatarFallback>SO</AvatarFallback>
+                  </Avatar>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                >
+                  <span>Team mate</span>
+                  <Plus className="size-3" />
+                </Button>
+              </div>
 
-          {/* User */}
-          <div className="flex items-center gap-4">
-            <Avatar>
-              <AvatarImage src="/placeholder.svg" />
-              <AvatarFallback>U</AvatarFallback>
-            </Avatar>
-            <Button variant="ghost" size="icon">
-              <ChevronDown className="size-4" />
-            </Button>
-          </div>
+              {/* Actions */}
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon">
+                  <Bell className="size-5" />
+                </Button>
+                <Button variant="ghost" size="icon">
+                  <Folder className="size-5" />
+                </Button>
+              </div>
+
+              {/* User */}
+              <div className="flex items-center gap-4">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="relative size-8 rounded-full"
+                    >
+                      <Avatar>
+                        <AvatarImage src="/placeholder.svg" />
+                        <AvatarFallback>
+                          {user.email?.[0].toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56" align="end" forceMount>
+                    <DropdownMenuLabel className="font-normal">
+                      <div className="flex flex-col space-y-1">
+                        <p className="text-sm font-medium leading-none">
+                          {user.email}
+                        </p>
+                        <p className="text-xs leading-none text-muted-foreground">
+                          {user.email}
+                        </p>
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/account" className="cursor-pointer">
+                        <User className="mr-2 size-4" />
+                        <span>Account settings</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={handleSignOut}
+                      className="text-destructive cursor-pointer"
+                      disabled={loading}
+                    >
+                      <LogOut className="mr-2 size-4" />
+                      <span>{loading ? "Logging out..." : "Log out"}</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </>
+          )}
 
           {/* Menu */}
           <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>

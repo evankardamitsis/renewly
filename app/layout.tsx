@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/@shared/theme-provider";
 import { Header } from "@/components/@shared/header";
+import { Toaster } from "sonner";
 
 // Configure Inter font with Latin subset
 const inter = Inter({ subsets: ["latin"] });
@@ -17,13 +18,13 @@ export const metadata: Metadata = {
 
 /**
  * Root Layout Component
- * 
+ *
  * Provides the base structure for all pages including:
  * - Font configuration
  * - Theme provider
  * - Global layout structure
  * - Header component
- * 
+ *
  * @param {Object} props - Component props
  * @param {React.ReactNode} props.children - Page content to be rendered
  * @returns {JSX.Element} The root layout structure
@@ -49,6 +50,7 @@ export default function RootLayout({
             </div>
           </div>
         </ThemeProvider>
+        <Toaster />
       </body>
     </html>
   );

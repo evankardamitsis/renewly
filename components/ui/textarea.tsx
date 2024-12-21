@@ -1,19 +1,19 @@
-import * as React from "react"
+import * as React from "react";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 /**
  * Textarea Component
- * 
+ *
  * A styled textarea component that matches the design system.
  * Provides consistent styling with other form elements.
- * 
+ *
  * Features:
  * - Minimum height setting
  * - Consistent border and focus styles
  * - Responsive text sizing
  * - Support for disabled state
- * 
+ *
  * @param props - Standard HTML textarea props plus optional className
  * @returns {JSX.Element} Styled textarea element
  */
@@ -30,8 +30,8 @@ const Textarea = React.forwardRef<
       ref={ref}
       {...props}
     />
-  )
-})
-Textarea.displayName = "Textarea"
+  );
+});
+Textarea.displayName = "Textarea";
 
-export { Textarea }
+export { Textarea };

@@ -1,11 +1,12 @@
 export interface Project {
-  id: string
-  slug: string
-  name: string
-  description: string
-  createdAt: string
-  updatedAt: string
-  dueDate: string
-  status: "Planning" | "In Progress" | "Review" | "Completed"
-  tasks: string[] // Array of task IDs
+  id: string;
+  name: string;
+  description: string | null;
+  slug: string;
+  status: "Planning" | "In Progress" | "Review" | "Completed";
+  due_date: string | null;
+  tasks: string[];
+  team_id: string;
+  created_at: string;
+  updated_at: string;
 } 

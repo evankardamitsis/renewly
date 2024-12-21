@@ -26,7 +26,7 @@ import {
   LayoutGrid,
   Plus,
   LogOut,
-  User,
+  User as UserIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/ui/sidebar";
@@ -199,7 +199,7 @@ export function Header() {
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
                       <Link href="/account" className="cursor-pointer">
-                        <User className="mr-2 size-4" />
+                        <UserIcon className="mr-2 size-4" />
                         <span>Account settings</span>
                       </Link>
                     </DropdownMenuItem>

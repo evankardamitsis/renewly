@@ -2,17 +2,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Project } from "@/types/project";
+import { Project } from "@/types/database";
 import { ProjectModal } from "./project-modal";
-import { Button } from "../ui/button";
+import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { generateSlug } from "@/utils/slug";
+import { toast } from "sonner";
 
 interface ProjectListProps {
   projects: Project[];
-  onProjectCreate: (project: Project) => void;
-  onProjectUpdate: (project: Project) => void;
+  onProjectCreate: (project: Partial<Project>) => Promise<void>;
+  onProjectUpdate: (id: string, updates: Partial<Project>) => Promise<void>;
 }
 
 export function ProjectList({
@@ -24,29 +25,32 @@ export function ProjectList({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | undefined>();
 
-  const handleProjectSave = (
-    project: Omit<Project, "status" | "dueDate" | "slug">
-  ) => {
-    const now = new Date().toISOString();
-    const completeProject: Project = {
-      ...project,
-      slug: generateSlug(project.name),
-      status: editingProject?.status || "Planning",
-      dueDate:
-        editingProject?.dueDate ||
-        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      createdAt: editingProject?.createdAt || now,
-      updatedAt: now,
-      tasks: editingProject?.tasks || [],
-    };
-
-    if (editingProject) {
-      onProjectUpdate(completeProject);
-    } else {
-      onProjectCreate(completeProject);
+  const handleProjectSave = async (project: {
+    name: string;
+    description: string | null;
+  }) => {
+    try {
+      if (editingProject) {
+        await onProjectUpdate(editingProject.id, {
+          name: project.name,
+          description: project.description,
+          slug: generateSlug(project.name),
+          updated_at: new Date().toISOString(),
+        });
+      } else {
+        await onProjectCreate({
+          name: project.name,
+          description: project.description,
+          slug: generateSlug(project.name),
+        });
+      }
+      setIsModalOpen(false);
+      setEditingProject(undefined);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save project"
+      );
     }
-    setIsModalOpen(false);
-    setEditingProject(undefined);
   };
 
   return (
@@ -74,7 +78,7 @@ export function ProjectList({
                 {project.description}
               </p>
               <div className="mt-2 text-sm text-muted-foreground">
-                {project.tasks.length} tasks
+                {project.tasks?.length || 0} tasks
               </div>
             </CardContent>
           </Card>

@@ -1,6 +1,6 @@
-export function generateSlug(name: string): string {
-  return name
+export function generateSlug(text: string): string {
+  return text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)+/g, '')
+    .replace(/(^-|-$)/g, '')
 } 

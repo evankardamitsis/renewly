@@ -11,8 +11,9 @@ import { useProjectStore } from "@/store/useProjectStore";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { calculateDaysLeft } from "@/utils/date";
 import { toast } from "sonner";
-import { Project } from "@/types/project";
+import { Project } from "@/types/database";
 import { generateSlug } from "@/utils/slug";
+import { createClient } from "@/utils/supabase/client";
 
 export function ActiveProjectsCard() {
   const router = useRouter();
@@ -21,28 +22,48 @@ export function ActiveProjectsCard() {
     useProjectStore();
 
   const activeProjects = projects.filter(
-    p => p.status === "In Progress" || p.status === "Planning"
-  )
+    (p) => p.status === "In Progress" || p.status === "Planning"
+  );
 
-  const handleProjectCreate = async (newProject: Omit<Project, "status" | "dueDate" | "slug">) => {
+  const handleProjectCreate = async (
+    newProject: Pick<Project, "name" | "description">
+  ) => {
     try {
-      const projectWithDefaults: Project = {
-        ...newProject,
-        slug: generateSlug(newProject.name),
-        status: "Planning",
-        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("Not authenticated");
       }
-      addProject(projectWithDefaults)
-      setIsModalOpen(false)
-      toast.success("Project created successfully")
-      router.push(`/projects/${projectWithDefaults.slug}`)
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("current_team_id")
+        .eq("id", user.id)
+        .single();
+
+      if (!profile?.current_team_id) {
+        throw new Error("No team selected");
+      }
+
+      const slug = generateSlug(newProject.name);
+      const createdProject = await addProject(profile.current_team_id, {
+        name: newProject.name,
+        description: newProject.description,
+        slug,
+      });
+
+      setIsModalOpen(false);
+      toast.success("Project created successfully");
+      router.push(`/projects/${createdProject.slug}`);
     } catch (err) {
       if (err instanceof Error) {
-        setError(err.message)
-        toast.error("Failed to create project")
+        setError(err.message);
+        toast.error("Failed to create project");
       }
     }
-  }
+  };
 
   if (error) {
     return (
@@ -89,7 +110,8 @@ export function ActiveProjectsCard() {
                 <div>
                   <p className="font-medium">{project.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    {calculateDaysLeft(project.dueDate)} days left
+                    {project.due_date ? calculateDaysLeft(project.due_date) : 0}{" "}
+                    days left
                   </p>
                 </div>
                 <Badge variant="secondary">{project.tasks.length} tasks</Badge>
@@ -112,4 +134,3 @@ export function ActiveProjectsCard() {
     </>
   );
 }
-

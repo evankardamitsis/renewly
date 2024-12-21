@@ -5,88 +5,74 @@ import {
   Droppable,
   Draggable,
   DropResult,
-} from "react-beautiful-dnd";
+} from "@hello-pangea/dnd";
+import { Task } from "@/types/database";
 import { TaskCard } from "./task-card";
-import { Task } from "@/types/task";
-import { cn } from "@/lib/utils";
-
-const columns = {
-  todo: "To Do",
-  "in-progress": "In Progress",
-  done: "Done",
-};
 
 interface TaskBoardProps {
   tasks: Task[];
-  onTaskUpdate: (updatedTask: Task) => void;
+  onTaskUpdate: (task: Task) => void;
 }
 
-export function TaskBoard({ tasks, onTaskUpdate }: TaskBoardProps) {
-  const onDragEnd = (result: DropResult) => {
-    const { destination, source, draggableId } = result;
+const COLUMNS: { id: Task["status"]; title: string }[] = [
+  { id: "todo", title: "To Do" },
+  { id: "in-progress", title: "In Progress" },
+  { id: "done", title: "Done" },
+];
 
-    if (!destination) return;
-    if (
-      destination.droppableId === source.droppableId &&
-      destination.index === source.index
-    )
-      return;
+export function TaskBoard({ tasks = [], onTaskUpdate }: TaskBoardProps) {
+  const handleDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+
+    const { source, destination, draggableId } = result;
+    if (source.droppableId === destination.droppableId) return;
 
     const task = tasks.find((t) => t.id === draggableId);
     if (!task) return;
 
-    onTaskUpdate({
-      ...task,
-      status: destination.droppableId as Task["status"],
-    });
+    const newStatus = destination.droppableId as Task["status"];
+    onTaskUpdate({ ...task, status: newStatus });
+  };
+
+  const getTasksByStatus = (status: Task["status"]) => {
+    return tasks?.filter((task) => task.status === status) ?? [];
   };
 
   return (
-    <DragDropContext onDragEnd={onDragEnd}>
-      <div className="grid gap-6 md:grid-cols-3">
-        {Object.entries(columns).map(([columnId, label]) => (
-          <div key={columnId} className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold">{label}</h2>
-              <span className="text-sm text-muted-foreground">
-                {tasks.filter((t) => t.status === columnId).length}
-              </span>
-            </div>
-            <Droppable droppableId={columnId}>
-              {(provided, snapshot) => (
+    <DragDropContext onDragEnd={handleDragEnd}>
+      <div className="grid grid-cols-3 gap-4">
+        {COLUMNS.map((column) => (
+          <div
+            key={column.id}
+            className="flex flex-col rounded-lg border bg-muted/50 p-4"
+          >
+            <h3 className="mb-4 text-lg font-semibold">{column.title}</h3>
+            <Droppable droppableId={column.id}>
+              {(provided) => (
                 <div
-                  {...provided.droppableProps}
                   ref={provided.innerRef}
-                  className={cn(
-                    "space-y-4 rounded-lg border-2 border-dashed p-4 min-h-[400px]",
-                    snapshot.isDraggingOver
-                      ? "border-primary/50 bg-primary/10"
-                      : "border-transparent"
-                  )}
+                  {...provided.droppableProps}
+                  className="flex flex-col gap-2"
                 >
-                  {tasks
-                    .filter((task) => task.status === columnId)
-                    .map((task, index) => (
-                      <Draggable
-                        key={task.id}
-                        draggableId={task.id}
-                        index={index}
-                      >
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            {...provided.dragHandleProps}
-                            className={cn(
-                              "rounded-lg border bg-card p-4 shadow-sm",
-                              snapshot.isDragging && "opacity-50"
-                            )}
-                          >
-                            <TaskCard {...task} />
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
+                  {getTasksByStatus(column.id).map((task, index) => (
+                    <Draggable
+                      key={task.id}
+                      draggableId={task.id}
+                      index={index}
+                    >
+                      {(provided) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                          className="transition-opacity"
+                          style={provided.draggableProps.style}
+                        >
+                          <TaskCard task={task} />
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
                   {provided.placeholder}
                 </div>
               )}

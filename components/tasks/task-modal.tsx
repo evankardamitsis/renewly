@@ -1,107 +1,79 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Textarea } from "../ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Task } from "@/types/database";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "../ui/select";
-import { Task } from "@/types/task";
-import { Plus, Trash } from "lucide-react";
-import { CustomField, RecurringInterval } from "@/types/task";
+} from "@/components/ui/select";
 
-/**
- * Interface defining the props for the TaskModal component
- * @interface TaskModalProps
- * @property {boolean} isOpen - Controls the visibility of the modal
- * @property {() => void} onClose - Callback function to handle modal closure
- * @property {(task: Task) => void} onSave - Callback function to handle task saving
- * @property {Task} [task] - Optional existing task for editing mode
- */
 interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (task: Task) => void;
+  onSave: (task: Partial<Task>) => Promise<void>;
   task?: Task;
+  projectId?: string;
 }
 
-/**
- * TaskModal Component
- *
- * A modal component for creating or editing tasks. Provides form fields for all task properties
- * and handles the state management for the form inputs.
- *
- * @param {TaskModalProps} props - Component props
- * @returns {JSX.Element} A modal dialog with task form fields
- */
-export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
-  // State management for form fields
+export function TaskModal({
+  isOpen,
+  onClose,
+  onSave,
+  task,
+  projectId,
+}: TaskModalProps) {
   const [title, setTitle] = useState(task?.title || "");
   const [description, setDescription] = useState(task?.description || "");
-  const [priority, setPriority] = useState(task?.priority || "medium");
-  const [status, setStatus] = useState(task?.status || "todo");
-  const [dueDate, setDueDate] = useState(task?.dueDate || "");
-  const [customFields, setCustomFields] = useState<CustomField[]>(
-    task?.customFields || []
+  const [priority, setPriority] = useState<Task["priority"]>(
+    task?.priority || "medium"
   );
-  const [isRecurring, setIsRecurring] = useState(task?.isRecurring || false);
-  const [recurringInterval, setRecurringInterval] = useState<RecurringInterval>(
-    task?.recurringInterval || "none"
-  );
+  const [status, setStatus] = useState<Task["status"]>(task?.status || "todo");
+  const [dueDate, setDueDate] = useState(task?.due_date || "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
-  /**
-   * Effect hook to reset form fields when task prop changes
-   * or when modal is opened/closed
-   */
   useEffect(() => {
-    if (task) {
-      setTitle(task.title);
-      setDescription(task.description);
-      setPriority(task.priority);
-      setStatus(task.status);
-      setDueDate(task.dueDate);
-      setCustomFields(task.customFields);
-      setIsRecurring(task.isRecurring);
-      setRecurringInterval(task.recurringInterval);
-    } else {
-      setTitle("");
-      setDescription("");
-      setPriority("medium");
-      setStatus("todo");
-      setDueDate("");
-      setCustomFields([]);
-      setIsRecurring(false);
-      setRecurringInterval("none");
-    }
-  }, [task]);
+    setTitle(task?.title || "");
+    setDescription(task?.description || "");
+    setPriority(task?.priority || "medium");
+    setStatus(task?.status || "todo");
+    setDueDate(task?.due_date || "");
+    setError("");
+  }, [task, isOpen]);
 
-  /**
-   * Handles the save action when form is submitted
-   * Creates or updates a task with current form values
-   */
-  const handleSave = () => {
-    const updatedTask: Task = {
-      id: task?.id || Date.now().toString(),
-      title,
-      description,
-      priority: priority as Task["priority"],
-      status: status as Task["status"],
-      dueDate,
-      assignees: task?.assignees || [],
-      comments: task?.comments || 0,
-      progress: task?.progress || 0,
-      customFields,
-      isRecurring,
-      recurringInterval,
-      projectId: task?.projectId || "",
-    };
-    onSave(updatedTask);
+  const handleSave = async () => {
+    if (!title.trim()) {
+      setError("Title is required");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setError("");
+      await onSave({
+        title: title.trim(),
+        description: description.trim(),
+        priority,
+        status,
+        due_date: dueDate || null,
+      });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to save task");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -116,8 +88,14 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
             <Input
               id="title"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setError("");
+              }}
+              className={error ? "border-destructive" : ""}
+              disabled={isSubmitting}
             />
+            {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <div className="grid gap-2">
             <label htmlFor="description">Description</label>
@@ -125,18 +103,18 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              disabled={isSubmitting}
             />
           </div>
           <div className="grid gap-2">
             <label htmlFor="priority">Priority</label>
             <Select
               value={priority}
-              onValueChange={(value: "low" | "medium" | "high") =>
-                setPriority(value)
-              }
+              onValueChange={(value: Task["priority"]) => setPriority(value)}
+              disabled={isSubmitting}
             >
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue placeholder="Select priority" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="low">Low</SelectItem>
@@ -149,12 +127,11 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
             <label htmlFor="status">Status</label>
             <Select
               value={status}
-              onValueChange={(value: "todo" | "in-progress" | "done") =>
-                setStatus(value)
-              }
+              onValueChange={(value: Task["status"]) => setStatus(value)}
+              disabled={isSubmitting}
             >
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue placeholder="Select status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todo">To Do</SelectItem>
@@ -167,97 +144,17 @@ export function TaskModal({ isOpen, onClose, onSave, task }: TaskModalProps) {
             <label htmlFor="dueDate">Due Date</label>
             <Input
               id="dueDate"
-              type="date"
+              type="datetime-local"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
+              disabled={isSubmitting}
             />
-          </div>
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <label htmlFor="recurring">Recurring Task</label>
-              <input
-                type="checkbox"
-                id="recurring"
-                checked={isRecurring}
-                onChange={(e) => setIsRecurring(e.target.checked)}
-              />
-            </div>
-
-            {isRecurring && (
-              <Select
-                value={recurringInterval}
-                onValueChange={(value: RecurringInterval) =>
-                  setRecurringInterval(value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select interval" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="annual">Annual</SelectItem>
-                  <SelectItem value="6month">Every 6 Months</SelectItem>
-                  <SelectItem value="3month">Every 3 Months</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold">Custom Fields</h3>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    setCustomFields([...customFields, { label: "", value: "" }])
-                  }
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Field
-                </Button>
-              </div>
-              {customFields.map((field, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <Input
-                    placeholder="Label"
-                    value={field.label}
-                    onChange={(e) =>
-                      setCustomFields(
-                        customFields.map((f, i) =>
-                          i === index ? { ...f, label: e.target.value } : f
-                        )
-                      )
-                    }
-                  />
-                  <Input
-                    placeholder="Value"
-                    value={field.value}
-                    onChange={(e) =>
-                      setCustomFields(
-                        customFields.map((f, i) =>
-                          i === index ? { ...f, value: e.target.value } : f
-                        )
-                      )
-                    }
-                  />
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() =>
-                      setCustomFields(
-                        customFields.filter((_, i) => i !== index)
-                      )
-                    }
-                  >
-                    <Trash className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
         <div className="flex justify-end">
-          <Button onClick={handleSave}>Save</Button>
+          <Button onClick={handleSave} disabled={isSubmitting}>
+            {isSubmitting ? "Saving..." : "Save"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { teamsApi } from '@/services/api'
-import { useAsync } from '@/hooks/use-async'
+import { useAsync } from '@/client/hooks/use-async'
 
 interface InviteMemberModalProps {
   teamId: string

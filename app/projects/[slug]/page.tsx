@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useProjectStore } from "@/store/useProjectStore";
 import { TaskBoard } from "@/components/tasks/task-board";
@@ -8,73 +8,140 @@ import { TaskTable } from "@/components/tasks/task-table";
 import { TaskFilters } from "@/components/tasks/task-filters";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, MoreVertical, Trash } from "lucide-react";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { TaskModal } from "@/components/tasks/task-modal";
-import { Task } from "@/types/task";
+import { Task } from "@/types/database";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { createClient } from "@/utils/supabase/client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function ProjectPage() {
-  const { slug } = useParams();
+  const params = useParams();
   const router = useRouter();
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
   const {
     projects,
+    tasks,
     isLoading,
     error,
     setSelectedProject,
-    updateProject,
+    updateTask,
     addTask,
+    fetchProjects,
+    fetchProjectTasks,
+    deleteProject,
   } = useProjectStore();
 
-  const project = projects.find((p) => p.slug === slug);
-  const projectTasks = useMemo(
-    () =>
-      project?.tasks.map(
-        (taskId) => useProjectStore.getState().tasks[taskId]
-      ) || [],
-    [project?.tasks]
-  );
+  const project = projects.find((p) => p.slug === params?.slug);
+
+  const initializeData = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("current_team_id")
+        .eq("id", user.id)
+        .single();
+
+      if (!profile?.current_team_id) {
+        toast.error("No team selected");
+        router.push("/teams");
+        return;
+      }
+
+      await fetchProjects(profile.current_team_id);
+      setIsInitialLoad(false);
+    } catch (error) {
+      toast.error("Failed to load project data");
+      setIsInitialLoad(false);
+    }
+  }, [fetchProjects, router]);
+
+  const loadProjectTasks = useCallback(async () => {
+    if (!project?.id) return;
+
+    try {
+      setSelectedProject(project.id);
+      const projectTasks = await fetchProjectTasks(project.id);
+      setFilteredTasks(projectTasks);
+    } catch (error) {
+      toast.error("Failed to load tasks");
+    }
+  }, [project?.id, setSelectedProject, fetchProjectTasks]);
 
   useEffect(() => {
-    if (project) {
-      setSelectedProject(project.id);
-      setFilteredTasks(projectTasks);
-    } else if (!isLoading) {
-      router.push("/projects");
+    if (isInitialLoad) {
+      initializeData();
     }
-  }, [project, projectTasks, isLoading, router, setSelectedProject]);
+  }, [isInitialLoad, initializeData]);
 
-  const handleTaskCreate = (task: Task) => {
-    if (project) {
-      addTask({ ...task, projectId: project.id });
-      const updatedProject = {
-        ...project,
-        tasks: [...project.tasks, task.id],
-      };
-      updateProject(updatedProject);
-      setIsTaskModalOpen(false);
+  useEffect(() => {
+    if (!isInitialLoad && !project && !isLoading) {
+      router.push("/projects");
+      return;
+    }
+
+    if (!isInitialLoad && project) {
+      loadProjectTasks();
+    }
+  }, [isInitialLoad, project, isLoading, router, loadProjectTasks]);
+
+  const handleTaskCreate = async (task: Partial<Task>) => {
+    if (!project) return;
+
+    try {
+      await addTask(project.id, {
+        ...task,
+        project_id: project.id,
+      });
       toast.success("Task created successfully");
+      setIsTaskModalOpen(false);
+      loadProjectTasks();
+    } catch (error) {
+      toast.error("Failed to create task");
     }
   };
 
-  const handleTaskUpdate = (updatedTask: Task) => {
-    if (project) {
-      const { updateTask } = useProjectStore.getState();
-      updateTask(updatedTask);
-      
-      // Force refresh the filtered tasks
-      setFilteredTasks(prev => 
-        prev.map(t => t.id === updatedTask.id ? updatedTask : t)
+  const handleTaskUpdate = async (updatedTask: Task) => {
+    if (!project) return;
+
+    try {
+      await updateTask(updatedTask.id, updatedTask);
+      setFilteredTasks((prev) =>
+        prev.map((t) => (t.id === updatedTask.id ? updatedTask : t))
       );
-      
       toast.success("Task updated successfully");
+    } catch (error) {
+      toast.error("Failed to update task");
     }
   };
 
   const handleSearch = (searchTerm: string) => {
+    if (!project) return;
+
+    const projectTasks = Object.values(tasks).filter(
+      (task) => task.project_id === project.id
+    );
+
     const filtered = projectTasks.filter(
       (task) =>
         task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -83,7 +150,19 @@ export default function ProjectPage() {
     setFilteredTasks(filtered);
   };
 
-  if (isLoading) return <LoadingSpinner />;
+  const handleProjectDelete = async () => {
+    if (!project) return;
+
+    try {
+      await deleteProject(project.id);
+      toast.success("Project deleted successfully");
+      router.push("/projects");
+    } catch (error) {
+      toast.error("Failed to delete project");
+    }
+  };
+
+  if (isInitialLoad || isLoading) return <LoadingSpinner />;
   if (error) return <div className="text-destructive">Error: {error}</div>;
   if (!project) return <LoadingSpinner />;
 
@@ -108,6 +187,22 @@ export default function ProjectPage() {
             <Plus className="mr-2 h-4 w-4" />
             Add Task
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={handleProjectDelete}
+              >
+                <Trash className="h-4 w-4 mr-2" />
+                Delete Project
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

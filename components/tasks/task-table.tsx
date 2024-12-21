@@ -1,123 +1,88 @@
 "use client";
 
-import { useState } from "react";
+import { Task } from "@/types/database";
 import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
+  TableCell,
 } from "@/components/ui/table";
-import { Task } from "@/types/task";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Pencil, Trash } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { TaskModal } from "./task-modal";
-import { TaskDetails } from "./task-details";
+import { format } from "date-fns";
+import { Users, MessageSquare } from "lucide-react";
 
 interface TaskTableProps {
   tasks: Task[];
-  onTaskUpdate: (updatedTask: Task) => void;
+  onTaskUpdate: (task: Task) => void;
 }
 
-export function TaskTable({ tasks, onTaskUpdate }: TaskTableProps) {
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [viewingTask, setViewingTask] = useState<Task | null>(null);
+export function TaskTable({ tasks }: TaskTableProps) {
+  const priorityColors = {
+    low: "bg-green-100 text-green-800",
+    medium: "bg-yellow-100 text-yellow-800",
+    high: "bg-red-100 text-red-800",
+  };
+
+  const statusColors = {
+    todo: "bg-gray-100 text-gray-800",
+    "in-progress": "bg-blue-100 text-blue-800",
+    done: "bg-green-100 text-green-800",
+  };
 
   return (
-    <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Title</TableHead>
-            <TableHead>Priority</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Due Date</TableHead>
-            <TableHead>Assignees</TableHead>
-            <TableHead>Actions</TableHead>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Title</TableHead>
+          <TableHead>Priority</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Due Date</TableHead>
+          <TableHead>Assignees</TableHead>
+          <TableHead>Comments</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {tasks.map((task) => (
+          <TableRow key={task.id}>
+            <TableCell className="font-medium">{task.title}</TableCell>
+            <TableCell>
+              <Badge className={priorityColors[task.priority]}>
+                {task.priority}
+              </Badge>
+            </TableCell>
+            <TableCell>
+              <Badge className={statusColors[task.status]}>{task.status}</Badge>
+            </TableCell>
+            <TableCell>
+              {task.due_date
+                ? format(new Date(task.due_date), "MMM d, yyyy")
+                : "-"}
+            </TableCell>
+            <TableCell>
+              {task.assignees?.length > 0 ? (
+                <div className="flex items-center gap-1">
+                  <Users className="h-4 w-4" />
+                  <span>{task.assignees.length}</span>
+                </div>
+              ) : (
+                "-"
+              )}
+            </TableCell>
+            <TableCell>
+              {task.comments > 0 ? (
+                <div className="flex items-center gap-1">
+                  <MessageSquare className="h-4 w-4" />
+                  <span>{task.comments}</span>
+                </div>
+              ) : (
+                "-"
+              )}
+            </TableCell>
           </TableRow>
-        </TableHeader>
-        <TableBody>
-          {tasks.map((task) => (
-            <TableRow key={task.id}>
-              <TableCell>{task.title}</TableCell>
-              <TableCell>
-                <Badge
-                  variant={
-                    task.priority === "high"
-                      ? "destructive"
-                      : task.priority === "medium"
-                      ? "default"
-                      : "secondary"
-                  }
-                >
-                  {task.priority}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <Badge variant={task.status === "done" ? "default" : "outline"}>
-                  {task.status}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                {new Date(task.dueDate).toLocaleDateString()}
-              </TableCell>
-              <TableCell>
-                {task.assignees.map((a) => a.name).join(", ")}
-              </TableCell>
-              <TableCell>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-8 w-8 p-0">
-                      <span className="sr-only">Open menu</span>
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setViewingTask(task)}>
-                      <Pencil className="mr-2 h-4 w-4" />
-                      View
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setEditingTask(task)}>
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Trash className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      {editingTask && (
-        <TaskModal
-          isOpen={!!editingTask}
-          onClose={() => setEditingTask(null)}
-          onSave={(updatedTask) => {
-            onTaskUpdate(updatedTask);
-            setEditingTask(null);
-          }}
-          task={editingTask}
-        />
-      )}
-      {viewingTask && (
-        <TaskDetails
-          task={viewingTask}
-          isOpen={!!viewingTask}
-          onClose={() => setViewingTask(null)}
-        />
-      )}
-    </>
+        ))}
+      </TableBody>
+    </Table>
   );
 }

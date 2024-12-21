@@ -1,19 +1,19 @@
-import * as React from "react"
+import * as React from "react";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 /**
  * Input Component
- * 
+ *
  * A styled input component that follows the design system.
  * Supports all standard HTML input attributes and custom styling.
- * 
+ *
  * Features:
  * - Consistent styling with other form elements
  * - Focus and hover states
  * - Support for disabled state
  * - File input styling
- * 
+ *
  * @param props - Standard HTML input props plus optional className
  * @returns {JSX.Element} Styled input element
  */
@@ -29,9 +29,9 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
         ref={ref}
         {...props}
       />
-    )
+    );
   }
-)
-Input.displayName = "Input"
+);
+Input.displayName = "Input";
 
-export { Input }
+export { Input };

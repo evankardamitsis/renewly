@@ -1,16 +1,24 @@
 "use client";
 
-import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Textarea } from "../ui/textarea";
-import { Project } from "@/types/project";
+import { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Project } from "@/types/database";
 
 interface ProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (project: Omit<Project, "status" | "dueDate">) => void;
+  onSave: (project: {
+    name: string;
+    description: string | null;
+  }) => Promise<void>;
   project?: Project;
 }
 
@@ -20,20 +28,44 @@ export function ProjectModal({
   onSave,
   project,
 }: ProjectModalProps) {
-  const [name, setName] = useState(project?.name || "");
-  const [description, setDescription] = useState(project?.description || "");
+  const [formData, setFormData] = useState({
+    name: project?.name || "",
+    description: project?.description || "",
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSave = () => {
-    const updatedProject = {
-      id: project?.id || Date.now().toString(),
-      name,
-      description,
-      createdAt: project?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      tasks: project?.tasks || [],
-      slug: project?.slug || name.toLowerCase().replace(/\s+/g, "-"),
-    };
-    onSave(updatedProject);
+  useEffect(() => {
+    if (isOpen) {
+      setFormData({
+        name: project?.name || "",
+        description: project?.description || "",
+      });
+      setError(null);
+    }
+  }, [isOpen, project]);
+
+  const handleSubmit = async () => {
+    try {
+      setIsSubmitting(true);
+      setError(null);
+
+      if (!formData.name.trim()) {
+        setError("Project name is required");
+        return;
+      }
+
+      await onSave({
+        name: formData.name.trim(),
+        description: formData.description.trim() || null,
+      });
+
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save project");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -49,21 +81,39 @@ export function ProjectModal({
             <label htmlFor="name">Name</label>
             <Input
               id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              value={formData.name}
+              onChange={(e) => {
+                setFormData({
+                  ...formData,
+                  name: e.target.value,
+                });
+                setError(null);
+              }}
+              className={error ? "border-destructive" : ""}
+              disabled={isSubmitting}
             />
+            {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <div className="grid gap-2">
             <label htmlFor="description">Description</label>
             <Textarea
               id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              value={formData.description}
+              onChange={(e) => {
+                setFormData({
+                  ...formData,
+                  description: e.target.value,
+                });
+                setError(null);
+              }}
+              disabled={isSubmitting}
             />
           </div>
         </div>
         <div className="flex justify-end">
-          <Button onClick={handleSave}>Save</Button>
+          <Button onClick={handleSubmit} disabled={isSubmitting}>
+            {isSubmitting ? "Saving..." : "Save"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

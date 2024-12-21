@@ -1,16 +1,16 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import * as AvatarPrimitive from "@radix-ui/react-avatar"
+import * as React from "react";
+import * as AvatarPrimitive from "@radix-ui/react-avatar";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 /**
  * Avatar Component
- * 
+ *
  * A circular avatar component that can display an image or fallback content.
  * Built on top of Radix UI's Avatar primitive.
- * 
+ *
  * @param props - Component props including className and children
  * @returns {JSX.Element} Styled avatar container
  */
@@ -26,12 +26,12 @@ const Avatar = React.forwardRef<
     )}
     {...props}
   />
-))
-Avatar.displayName = AvatarPrimitive.Root.displayName
+));
+Avatar.displayName = AvatarPrimitive.Root.displayName;
 
 /**
  * Avatar Image Component
- * 
+ *
  * Handles the image display within the avatar.
  * Automatically falls back to AvatarFallback when image fails to load.
  */
@@ -44,12 +44,12 @@ const AvatarImage = React.forwardRef<
     className={cn("aspect-square h-full w-full", className)}
     {...props}
   />
-))
-AvatarImage.displayName = AvatarPrimitive.Image.displayName
+));
+AvatarImage.displayName = AvatarPrimitive.Image.displayName;
 
 /**
  * Avatar Fallback Component
- * 
+ *
  * Displays when the image is not available or loading.
  * Usually contains initials or a placeholder icon.
  */
@@ -65,7 +65,7 @@ const AvatarFallback = React.forwardRef<
     )}
     {...props}
   />
-))
-AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName
+));
+AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName;
 
-export { Avatar, AvatarImage, AvatarFallback }
+export { Avatar, AvatarImage, AvatarFallback };

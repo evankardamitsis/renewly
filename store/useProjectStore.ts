@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import { Project, Task } from "@/types/database"
 import { projectsApi, tasksApi } from "@/services/api"
+import { generateSlug } from "@/utils/slug"
 
 interface ProjectState {
   projects: Project[]
@@ -8,90 +9,154 @@ interface ProjectState {
   isLoading: boolean
   error: string | null
   selectedProjectId: string | null
-  // Actions
+
+  // Project actions
   setProjects: (projects: Project[]) => void
-  addProject: (teamId: string, project: Partial<Project>) => Promise<void>
+  fetchProjects: (teamId: string) => Promise<void>
+  addProject: (input: CreateProjectInput) => Promise<Project>
   updateProject: (id: string, updates: Partial<Project>) => Promise<void>
   deleteProject: (id: string) => void
   setSelectedProject: (id: string | null) => void
-  setLoading: (isLoading: boolean) => void
-  setError: (error: string | null) => void
-  getActiveProjects: () => Project[]
+
+  // Task actions
   setTasks: (tasks: Record<string, Task>) => void
   addTask: (projectId: string, task: Partial<Task>) => Promise<void>
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>
   deleteTask: (id: string) => void
+  fetchProjectTasks: (projectId: string) => Promise<void>
+
+  // UI state
+  setLoading: (isLoading: boolean) => void
+  setError: (error: string | null) => void
 }
 
-// Sample data
-const initialProjects: Project[] = [
-  {
-      id: "1",
-      name: "Website Redesign",
-      description: "Redesigning the company website",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      tasks: [],
-      dueDate: "",
-      status: "Planning",
-      slug: ""
-  },
-]
+interface CreateProjectInput {
+  name: string;
+  description: string | null;
+  team_id: string;
+}
 
-export const useProjectStore = create<ProjectState>((set, get) => ({
-  projects: initialProjects,
+export const useProjectStore = create<ProjectState>((set) => ({
+  projects: [],
+  tasks: {},
   isLoading: false,
   error: null,
   selectedProjectId: null,
-  tasks: {},
 
+  // Project actions
   setProjects: (projects) => set({ projects }),
-  addProject: async (teamId, project) => {
-    const newProject = await projectsApi.create(teamId, project)
-    set((state) => ({
-      projects: [...state.projects, newProject]
-    }))
+  fetchProjects: async (teamId: string) => {
+    try {
+      set({ isLoading: true, error: null });
+      const projects = await projectsApi.list(teamId);
+      if (projects) {
+        set({ projects, isLoading: false });
+      }
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : "Failed to fetch projects",
+        isLoading: false,
+      });
+    }
+  },
+  addProject: async (input) => {
+    try {
+      const projectData = {
+        ...input,
+        slug: generateSlug(input.name),
+        status: "Planning" as const,
+        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        tasks: [],
+      };
+
+      const newProject = await projectsApi.create(input.team_id, projectData);
+      
+      set((state) => ({
+        projects: [...state.projects, newProject],
+      }));
+
+      return newProject;
+    } catch (error) {
+      throw error;
+    }
   },
   updateProject: async (id, updates) => {
-    const updated = await projectsApi.update(id, updates)
-    set((state) => ({
-      projects: state.projects.map((p) => 
-        p.id === id ? updated : p
-      )
-    }))
+    try {
+      const updated = await projectsApi.update(id, updates);
+      if (updated) {
+        set((state) => ({
+          projects: state.projects.map((p) => (p.id === id ? updated : p)),
+        }));
+      }
+    } catch (error) {
+      throw error;
+    }
   },
-  deleteProject: (id) =>
-    set((state) => ({
-      projects: state.projects.filter((p) => p.id !== id),
-    })),
+  deleteProject: async (id: string) => {
+    try {
+      await projectsApi.delete(id)
+      set((state) => ({
+        projects: state.projects.filter((p) => p.id !== id)
+      }))
+    } catch (error) {
+      throw error
+    }
+  },
   setSelectedProject: (id) => set({ selectedProjectId: id }),
-  setLoading: (isLoading) => set({ isLoading }),
-  setError: (error) => set({ error }),
-  getActiveProjects: () => {
-    const state = get()
-    return state.projects.filter(
-      p => p.status === "In Progress" || p.status === "Planning"
-    )
-  },
+
+  // Task actions
   setTasks: (tasks) => set({ tasks }),
   addTask: async (projectId, task) => {
-    const newTask = await tasksApi.create(projectId, task)
-    set((state) => ({
-      tasks: { ...state.tasks, [newTask.id]: newTask }
-    }))
+    try {
+      const newTask = await tasksApi.create(projectId, task);
+      if (newTask) {
+        set((state) => ({
+          tasks: { ...state.tasks, [newTask.id]: newTask },
+        }));
+      }
+    } catch (error) {
+      throw error;
+    }
   },
   updateTask: async (id, updates) => {
-    const updated = await tasksApi.update(id, updates)
-    set((state) => ({
-      tasks: {
-        ...state.tasks,
-        [id]: updated
+    try {
+      const updated = await tasksApi.update(id, updates);
+      if (updated) {
+        set((state) => ({
+          tasks: {
+            ...state.tasks,
+            [id]: { ...state.tasks[id], ...updated },
+          },
+        }));
       }
-    }))
+    } catch (error) {
+      throw error;
+    }
   },
-  deleteTask: (id) => set((state) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { [id]: _, ...remainingTasks } = state.tasks
-    return { tasks: remainingTasks }
-  }),
+  deleteTask: (id) =>
+    set((state) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { [id]: _, ...remainingTasks } = state.tasks;
+      return { tasks: remainingTasks };
+    }),
+  fetchProjectTasks: async (projectId: string) => {
+    try {
+      const tasks = await tasksApi.getByProject(projectId);
+      if (tasks) {
+        const tasksMap = tasks.reduce(
+          (acc, task) => ({ ...acc, [task.id]: task }),
+          {}
+        );
+        set((state) => ({
+          tasks: { ...state.tasks, ...tasksMap },
+        }));
+      }
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // UI state
+  setLoading: (isLoading) => set({ isLoading }),
+  setError: (error) => set({ error }),
 })) 

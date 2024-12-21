@@ -5,13 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { toast } from "sonner";
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirectTo") || "/dashboard";
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -23,7 +25,7 @@ export default function LoginPage() {
       const password = formData.get("password") as string;
 
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -33,9 +35,45 @@ export default function LoginPage() {
         return;
       }
 
-      toast.success("Logged in successfully!");
+      // First, try to get the profile
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("has_completed_onboarding")
+        .eq("id", data.user.id)
+        .single();
+
+      // If profile doesn't exist, create it
+      if (profileError?.code === "PGRST116") {
+        const { error: createError } = await supabase
+          .from("profiles")
+          .insert({
+            id: data.user.id,
+            email: data.user.email,
+            has_completed_onboarding: false,
+          });
+
+        if (createError) throw createError;
+
+        router.refresh();
+        router.replace("/onboarding");
+        toast.success("Logged in successfully!");
+        return;
+      }
+
+      // If there was a different error, throw it
+      if (profileError) throw profileError;
+
       router.refresh();
+
+      if (!profile?.has_completed_onboarding) {
+        router.replace("/onboarding");
+      } else {
+        router.replace(redirectTo);
+      }
+
+      toast.success("Logged in successfully!");
     } catch (error) {
+      console.error("Unexpected error:", error);
       toast.error("An unexpected error occurred");
     } finally {
       setLoading(false);
@@ -56,6 +94,7 @@ export default function LoginPage() {
               type="email"
               placeholder="Email"
               required
+              disabled={loading}
             />
           </div>
           <div className="space-y-2">
@@ -65,6 +104,7 @@ export default function LoginPage() {
               type="password"
               placeholder="Password"
               required
+              disabled={loading}
             />
           </div>
           <Button type="submit" className="w-full" disabled={loading}>

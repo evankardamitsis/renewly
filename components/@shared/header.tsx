@@ -22,7 +22,6 @@ import { MainNav } from "@/components/@shared/main-nav";
 import {
   Mic,
   Bell,
-  Folder,
   LayoutGrid,
   Plus,
   LogOut,
@@ -37,26 +36,116 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 
+interface Profile {
+  display_name: string | null;
+  email: string | null;
+  current_team_id: string | null;
+}
+
+interface Team {
+  image_url: string | null;
+}
+
 export function Header() {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [team, setTeam] = useState<Team | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     const supabase = createClient();
 
-    // Get initial user
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-    });
+    async function getProfileAndTeam() {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return;
 
-    // Listen for auth changes
+        setUser(user);
+
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("display_name, email, current_team_id")
+          .eq("id", user.id)
+          .single();
+
+        setProfile(profileData);
+
+        if (profileData?.current_team_id) {
+          const { data: teamData } = await supabase
+            .from("teams")
+            .select("image_url")
+            .eq("id", profileData.current_team_id)
+            .single();
+
+          if (teamData?.image_url) {
+            const fileNameMatch = teamData.image_url.match(
+              /([a-f0-9-]+-\d+\.png)$/i
+            );
+            const fileName = fileNameMatch ? fileNameMatch[1] : null;
+
+            if (fileName) {
+              const {
+                data: { publicUrl },
+              } = supabase.storage.from("team-images").getPublicUrl(fileName);
+
+              setTeam({ image_url: publicUrl });
+              return;
+            }
+          }
+          setTeam(teamData);
+        }
+      } catch (error) {
+        console.error("Error fetching profile:", error);
+      }
+    }
+
+    getProfileAndTeam();
+
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_, session) => {
+    } = supabase.auth.onAuthStateChange(async (_, session) => {
       setUser(session?.user ?? null);
+      if (session?.user) {
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("display_name, email, current_team_id")
+          .eq("id", session.user.id)
+          .single();
+
+        if (profileData?.current_team_id) {
+          const { data: teamData } = await supabase
+            .from("teams")
+            .select("image_url")
+            .eq("id", profileData.current_team_id)
+            .single();
+
+          if (teamData?.image_url) {
+            const fileNameMatch = teamData.image_url.match(
+              /([a-f0-9-]+-\d+\.png)$/i
+            );
+            const fileName = fileNameMatch ? fileNameMatch[1] : null;
+
+            if (fileName) {
+              const {
+                data: { publicUrl },
+              } = supabase.storage.from("team-images").getPublicUrl(fileName);
+
+              setTeam({ image_url: publicUrl });
+              return;
+            }
+          }
+          setTeam(teamData);
+        }
+        setProfile(profileData);
+      } else {
+        setProfile(null);
+        setTeam(null);
+      }
     });
 
     return () => {
@@ -164,9 +253,6 @@ export function Header() {
                 <Button variant="ghost" size="icon">
                   <Bell className="size-5" />
                 </Button>
-                <Button variant="ghost" size="icon">
-                  <Folder className="size-5" />
-                </Button>
               </div>
 
               {/* User */}
@@ -178,9 +264,19 @@ export function Header() {
                       className="relative size-8 rounded-full"
                     >
                       <Avatar>
-                        <AvatarImage src="/placeholder.svg" />
+                        <AvatarImage
+                          src={team?.image_url || "/placeholder.svg"}
+                          onError={(e) =>
+                            (e.currentTarget.src = "/placeholder.svg")
+                          }
+                          alt={`${
+                            profile?.display_name || "User"
+                          }'s team avatar`}
+                          className="object-cover"
+                        />
                         <AvatarFallback>
-                          {user.email?.[0].toUpperCase()}
+                          {profile?.display_name?.[0] ||
+                            user?.email?.[0].toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                     </Button>
@@ -189,7 +285,7 @@ export function Header() {
                     <DropdownMenuLabel className="font-normal">
                       <div className="flex flex-col space-y-1">
                         <p className="text-sm font-medium leading-none">
-                          {user.email}
+                          {profile?.display_name || user.email}
                         </p>
                         <p className="text-xs leading-none text-muted-foreground">
                           {user.email}

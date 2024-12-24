@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,111 +10,68 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Project } from "@/types/database";
+import { Label } from "@/components/ui/label";
 
 interface ProjectModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (project: {
-    name: string;
-    description: string | null;
-  }) => Promise<void>;
-  project?: Project;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (data: { name: string; description: string }) => void;
+  loading?: boolean;
 }
 
 export function ProjectModal({
-  isOpen,
-  onClose,
-  onSave,
-  project,
+  open,
+  onOpenChange,
+  onSubmit,
+  loading = false,
 }: ProjectModalProps) {
-  const [formData, setFormData] = useState({
-    name: project?.name || "",
-    description: project?.description || "",
-  });
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
 
-  useEffect(() => {
-    if (isOpen) {
-      setFormData({
-        name: project?.name || "",
-        description: project?.description || "",
-      });
-      setError(null);
-    }
-  }, [isOpen, project]);
-
-  const handleSubmit = async () => {
-    try {
-      setIsSubmitting(true);
-      setError(null);
-
-      if (!formData.name.trim()) {
-        setError("Project name is required");
-        return;
-      }
-
-      await onSave({
-        name: formData.name.trim(),
-        description: formData.description.trim() || null,
-      });
-
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save project");
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({ name, description });
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>
-            {project ? "Edit Project" : "Create New Project"}
-          </DialogTitle>
+          <DialogTitle>Create New Project</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <label htmlFor="name">Name</label>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">Name</Label>
             <Input
               id="name"
-              value={formData.name}
-              onChange={(e) => {
-                setFormData({
-                  ...formData,
-                  name: e.target.value,
-                });
-                setError(null);
-              }}
-              className={error ? "border-destructive" : ""}
-              disabled={isSubmitting}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Project name"
+              required
             />
-            {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
-          <div className="grid gap-2">
-            <label htmlFor="description">Description</label>
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
-              value={formData.description}
-              onChange={(e) => {
-                setFormData({
-                  ...formData,
-                  description: e.target.value,
-                });
-                setError(null);
-              }}
-              disabled={isSubmitting}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Project description"
             />
           </div>
-        </div>
-        <div className="flex justify-end">
-          <Button onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? "Saving..." : "Save"}
-          </Button>
-        </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Creating..." : "Create Project"}
+            </Button>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

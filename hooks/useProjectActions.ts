@@ -1,22 +1,18 @@
-import { useProjectStore } from "@/store/useProjectStore";
-import { createClient } from "@/utils/supabase/client";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
+import { useProjectStore } from "@/store/useProjectStore";
 import { toast } from "sonner";
-import { generateSlug } from "@/utils/slug";
-import { edgeApi } from "@/utils/api-client";
 
 export function useProjectActions() {
   const router = useRouter();
-  const { addProject, setError } = useProjectStore();
+  const { addProject } = useProjectStore();
+  const [isLoadingTeam, setIsLoadingTeam] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
-  const createProject = async ({
-    name,
-    description,
-  }: {
-    name: string;
-    description: string | null;
-  }) => {
+  const getCurrentTeamId = async () => {
     try {
+      setIsLoadingTeam(true);
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
@@ -31,27 +27,52 @@ export function useProjectActions() {
         throw new Error("No team selected");
       }
 
-      const projectData = {
+      return profile.current_team_id;
+    } finally {
+      setIsLoadingTeam(false);
+    }
+  };
+
+  const createProject = async ({
+    name,
+    description = null,
+    status = "Planning",
+    due_date,
+  }: {
+    name: string;
+    description?: string | null;
+    status?: "Planning" | "In Progress" | "Review" | "Completed";
+    due_date?: string;
+  }) => {
+    try {
+      setIsCreating(true);
+      const team_id = await getCurrentTeamId();
+
+      const project = await addProject({
         name,
         description,
-        team_id: profile.current_team_id,
-        slug: generateSlug(name),
-      };
+        team_id,
+        status,
+        due_date,
+      });
 
-      const createdProject = await edgeApi.createProject(projectData);
-      addProject(createdProject);
       toast.success("Project created successfully");
-      router.push(`/projects/${createdProject.slug}`);
-      return createdProject;
+      router.push(`/projects/${project.slug}`);
+      return { project, error: null };
     } catch (err) {
       const message = err instanceof Error
         ? err.message
         : "Failed to create project";
-      setError(message);
       toast.error(message);
-      throw err;
+      return { project: null, error: message };
+    } finally {
+      setIsCreating(false);
     }
   };
 
-  return { createProject };
+  return {
+    createProject,
+    isLoadingTeam,
+    isCreating,
+  };
 }

@@ -21,6 +21,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useTaskActions } from "@/hooks/useTaskActions";
+import { tasksApi } from "@/services/api";
 
 export default function ProjectPage() {
   const params = useParams();
@@ -31,18 +33,20 @@ export default function ProjectPage() {
 
   const {
     projects,
-    tasks,
     isLoading,
     error,
     setSelectedProject,
-    updateTask,
-    addTask,
     fetchProjects,
-    fetchProjectTasks,
     deleteProject,
   } = useProjectStore();
 
   const project = projects.find((p) => p.slug === params?.slug);
+
+  const {
+    createTask,
+    updateTask: handleTaskUpdate,
+    isCreating,
+  } = useTaskActions();
 
   const initializeData = useCallback(async () => {
     try {
@@ -81,12 +85,13 @@ export default function ProjectPage() {
 
     try {
       setSelectedProject(project.id);
-      const projectTasks = await fetchProjectTasks(project.id);
-      setFilteredTasks(projectTasks);
+      const tasks = await tasksApi.fetchProjectTasks(project.id);
+      setFilteredTasks(tasks);
     } catch (error) {
       toast.error("Failed to load tasks");
+      setFilteredTasks([]);
     }
-  }, [project?.id, setSelectedProject, fetchProjectTasks]);
+  }, [project?.id, setSelectedProject]);
 
   useEffect(() => {
     if (isInitialLoad) {
@@ -108,44 +113,42 @@ export default function ProjectPage() {
   const handleTaskCreate = async (task: Partial<Task>) => {
     if (!project) return;
 
-    try {
-      await addTask(project.id, {
-        ...task,
-        project_id: project.id,
-      });
-      toast.success("Task created successfully");
+    const result = await createTask(project.id, {
+      ...task,
+      project_id: project.id,
+    });
+
+    if (result.task) {
       setIsTaskModalOpen(false);
-      loadProjectTasks();
-    } catch (error) {
-      toast.error("Failed to create task");
+      setFilteredTasks((prev) => [...prev, result.task!]);
+      await loadProjectTasks();
     }
   };
 
-  const handleTaskUpdate = async (updatedTask: Task) => {
+  const handleTaskClick = async (updatedTask: Task) => {
     if (!project) return;
 
-    try {
-      await updateTask(updatedTask.id, updatedTask);
+    const { task: updatedTaskResult } = await handleTaskUpdate(
+      updatedTask.id,
+      updatedTask
+    );
+
+    if (updatedTaskResult) {
       setFilteredTasks((prev) =>
-        prev.map((t) => (t.id === updatedTask.id ? updatedTask : t))
+        prev.map((t) => (t.id === updatedTaskResult.id ? updatedTaskResult : t))
       );
-      toast.success("Task updated successfully");
-    } catch (error) {
-      toast.error("Failed to update task");
     }
   };
 
   const handleSearch = (searchTerm: string) => {
     if (!project) return;
 
-    const projectTasks = Object.values(tasks).filter(
-      (task) => task.project_id === project.id
-    );
-
-    const filtered = projectTasks.filter(
+    const filtered = filteredTasks.filter(
       (task) =>
         task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        task.description.toLowerCase().includes(searchTerm.toLowerCase())
+        (task.description?.toLowerCase() || "").includes(
+          searchTerm.toLowerCase()
+        )
     );
     setFilteredTasks(filtered);
   };
@@ -159,6 +162,18 @@ export default function ProjectPage() {
       router.push("/projects");
     } catch (error) {
       toast.error("Failed to delete project");
+    }
+  };
+
+  const handleTaskDelete = async (taskId: string) => {
+    if (!project) return;
+
+    try {
+      await tasksApi.delete(taskId);
+      setFilteredTasks((prev) => prev.filter((t) => t.id !== taskId));
+      toast.success("Task deleted successfully");
+    } catch (error) {
+      toast.error("Failed to delete task");
     }
   };
 
@@ -212,10 +227,14 @@ export default function ProjectPage() {
           <TabsTrigger value="table">Table</TabsTrigger>
         </TabsList>
         <TabsContent value="board">
-          <TaskBoard tasks={filteredTasks} onTaskUpdate={handleTaskUpdate} />
+          <TaskBoard tasks={filteredTasks} onTaskClick={handleTaskClick} />
         </TabsContent>
         <TabsContent value="table">
-          <TaskTable tasks={filteredTasks} onTaskUpdate={handleTaskUpdate} />
+          <TaskTable
+            tasks={filteredTasks}
+            onTaskClick={handleTaskClick}
+            onTaskDelete={handleTaskDelete}
+          />
         </TabsContent>
       </Tabs>
 
@@ -223,6 +242,8 @@ export default function ProjectPage() {
         isOpen={isTaskModalOpen}
         onClose={() => setIsTaskModalOpen(false)}
         onSave={handleTaskCreate}
+        loading={isCreating}
+        projectId={project.id}
       />
     </div>
   );

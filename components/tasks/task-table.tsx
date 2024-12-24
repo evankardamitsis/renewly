@@ -11,78 +11,137 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { Users, MessageSquare } from "lucide-react";
+import { Users, MessageSquare, Calendar } from "lucide-react";
+import { useState } from "react";
+import { TaskDrawer } from "./task-drawer";
 
 interface TaskTableProps {
   tasks: Task[];
-  onTaskUpdate: (task: Task) => void;
+  onTaskClick?: (task: Task) => void;
+  onTaskDelete?: (taskId: string) => Promise<void>;
 }
 
-export function TaskTable({ tasks }: TaskTableProps) {
-  const priorityColors = {
-    low: "bg-green-100 text-green-800",
-    medium: "bg-yellow-100 text-yellow-800",
-    high: "bg-red-100 text-red-800",
+const PRIORITY_VARIANTS = {
+  low: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
+  medium:
+    "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
+  high: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
+} as const;
+
+const STATUS_VARIANTS = {
+  todo: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
+  "in-progress":
+    "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+  done: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
+} as const;
+
+export function TaskTable({
+  tasks = [],
+  onTaskClick,
+  onTaskDelete,
+}: TaskTableProps) {
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task);
   };
 
-  const statusColors = {
-    todo: "bg-gray-100 text-gray-800",
-    "in-progress": "bg-blue-100 text-blue-800",
-    done: "bg-green-100 text-green-800",
+  const handleClose = () => {
+    setSelectedTask(null);
   };
+
+  if (!tasks?.length) {
+    return (
+      <div className="text-center py-6 text-muted-foreground">
+        No tasks found
+      </div>
+    );
+  }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Title</TableHead>
-          <TableHead>Priority</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Due Date</TableHead>
-          <TableHead>Assignees</TableHead>
-          <TableHead>Comments</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {tasks.map((task) => (
-          <TableRow key={task.id}>
-            <TableCell className="font-medium">{task.title}</TableCell>
-            <TableCell>
-              <Badge className={priorityColors[task.priority]}>
-                {task.priority}
-              </Badge>
-            </TableCell>
-            <TableCell>
-              <Badge className={statusColors[task.status]}>{task.status}</Badge>
-            </TableCell>
-            <TableCell>
-              {task.due_date
-                ? format(new Date(task.due_date), "MMM d, yyyy")
-                : "-"}
-            </TableCell>
-            <TableCell>
-              {task.assignees?.length > 0 ? (
-                <div className="flex items-center gap-1">
-                  <Users className="h-4 w-4" />
-                  <span>{task.assignees.length}</span>
-                </div>
-              ) : (
-                "-"
-              )}
-            </TableCell>
-            <TableCell>
-              {task.comments > 0 ? (
-                <div className="flex items-center gap-1">
-                  <MessageSquare className="h-4 w-4" />
-                  <span>{task.comments}</span>
-                </div>
-              ) : (
-                "-"
-              )}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <>
+      <div className="border rounded-lg">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Title</TableHead>
+              <TableHead>Priority</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Due Date</TableHead>
+              <TableHead>Assignees</TableHead>
+              <TableHead>Comments</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {tasks.map((task) => (
+              <TableRow
+                key={task.id}
+                className="cursor-pointer hover:bg-accent/50"
+                onClick={() => handleTaskClick(task)}
+              >
+                <TableCell className="font-medium">{task.title}</TableCell>
+                <TableCell>
+                  <Badge
+                    variant="secondary"
+                    className={PRIORITY_VARIANTS[task.priority]}
+                  >
+                    {task.priority}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    variant="secondary"
+                    className={STATUS_VARIANTS[task.status]}
+                  >
+                    {task.status}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  {task.due_date ? (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Calendar className="h-4 w-4" />
+                      {format(new Date(task.due_date), "MMM d, yyyy")}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {task.assignees?.length ? (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Users className="h-4 w-4" />
+                      {task.assignees.length}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {task.comments ? (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <MessageSquare className="h-4 w-4" />
+                      {task.comments}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {selectedTask && (
+        <TaskDrawer
+          task={selectedTask}
+          isOpen={!!selectedTask}
+          onClose={handleClose}
+          onUpdate={onTaskClick}
+          onDelete={onTaskDelete}
+          loading={false}
+        />
+      )}
+    </>
   );
 }

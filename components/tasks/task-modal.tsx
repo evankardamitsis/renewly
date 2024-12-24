@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { LoadingSpinner } from "../ui/loading-spinner";
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -25,6 +27,7 @@ interface TaskModalProps {
   onSave: (task: Partial<Task>) => Promise<void>;
   task?: Task;
   projectId?: string;
+  loading?: boolean;
 }
 
 export function TaskModal({
@@ -33,6 +36,7 @@ export function TaskModal({
   onSave,
   task,
   projectId,
+  loading,
 }: TaskModalProps) {
   const [title, setTitle] = useState(task?.title || "");
   const [description, setDescription] = useState(task?.description || "");
@@ -53,7 +57,9 @@ export function TaskModal({
     setError("");
   }, [task, isOpen]);
 
-  const handleSave = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
     if (!title.trim()) {
       setError("Title is required");
       return;
@@ -68,7 +74,9 @@ export function TaskModal({
         priority,
         status,
         due_date: dueDate || null,
+        project_id: projectId,
       });
+      onClose();
     } catch (error) {
       setError(error instanceof Error ? error.message : "Failed to save task");
     } finally {
@@ -82,80 +90,82 @@ export function TaskModal({
         <DialogHeader>
           <DialogTitle>{task ? "Edit Task" : "Create New Task"}</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <label htmlFor="title">Title</label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                setError("");
-              }}
-              className={error ? "border-destructive" : ""}
-              disabled={isSubmitting}
-            />
-            {error && <p className="text-sm text-destructive">{error}</p>}
+        <form onSubmit={handleSubmit}>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <label htmlFor="title">Title</label>
+              <Input
+                id="title"
+                value={title}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  setError("");
+                }}
+                className={error ? "border-destructive" : ""}
+                disabled={isSubmitting}
+              />
+              {error && <p className="text-sm text-destructive">{error}</p>}
+            </div>
+            <div className="grid gap-2">
+              <label htmlFor="description">Description</label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                disabled={isSubmitting}
+              />
+            </div>
+            <div className="grid gap-2">
+              <label htmlFor="priority">Priority</label>
+              <Select
+                value={priority}
+                onValueChange={(value: Task["priority"]) => setPriority(value)}
+                disabled={isSubmitting}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <label htmlFor="status">Status</label>
+              <Select
+                value={status}
+                onValueChange={(value: Task["status"]) => setStatus(value)}
+                disabled={isSubmitting}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todo">To Do</SelectItem>
+                  <SelectItem value="in-progress">In Progress</SelectItem>
+                  <SelectItem value="done">Done</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <label htmlFor="dueDate">Due Date</label>
+              <Input
+                id="dueDate"
+                type="datetime-local"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                disabled={isSubmitting}
+              />
+            </div>
           </div>
-          <div className="grid gap-2">
-            <label htmlFor="description">Description</label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              disabled={isSubmitting}
-            />
-          </div>
-          <div className="grid gap-2">
-            <label htmlFor="priority">Priority</label>
-            <Select
-              value={priority}
-              onValueChange={(value: Task["priority"]) => setPriority(value)}
-              disabled={isSubmitting}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="low">Low</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <label htmlFor="status">Status</label>
-            <Select
-              value={status}
-              onValueChange={(value: Task["status"]) => setStatus(value)}
-              disabled={isSubmitting}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todo">To Do</SelectItem>
-                <SelectItem value="in-progress">In Progress</SelectItem>
-                <SelectItem value="done">Done</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <label htmlFor="dueDate">Due Date</label>
-            <Input
-              id="dueDate"
-              type="datetime-local"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              disabled={isSubmitting}
-            />
-          </div>
-        </div>
-        <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={isSubmitting}>
-            {isSubmitting ? "Saving..." : "Save"}
-          </Button>
-        </div>
+          <DialogFooter>
+            <Button type="submit" disabled={loading || isSubmitting}>
+              {loading ? <LoadingSpinner /> : task ? "Update" : "Create"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

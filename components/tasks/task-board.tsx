@@ -11,7 +11,7 @@ import { TaskCard } from "./task-card";
 
 interface TaskBoardProps {
   tasks: Task[];
-  onTaskUpdate: (task: Task) => void;
+  onTaskClick?: (task: Task) => void;
 }
 
 const COLUMNS: { id: Task["status"]; title: string }[] = [
@@ -20,9 +20,9 @@ const COLUMNS: { id: Task["status"]; title: string }[] = [
   { id: "done", title: "Done" },
 ];
 
-export function TaskBoard({ tasks = [], onTaskUpdate }: TaskBoardProps) {
+export function TaskBoard({ tasks = [], onTaskClick }: TaskBoardProps) {
   const handleDragEnd = (result: DropResult) => {
-    if (!result.destination) return;
+    if (!result.destination || !onTaskClick) return;
 
     const { source, destination, draggableId } = result;
     if (source.droppableId === destination.droppableId) return;
@@ -31,7 +31,7 @@ export function TaskBoard({ tasks = [], onTaskUpdate }: TaskBoardProps) {
     if (!task) return;
 
     const newStatus = destination.droppableId as Task["status"];
-    onTaskUpdate({ ...task, status: newStatus });
+    onTaskClick({ ...task, status: newStatus });
   };
 
   const getTasksByStatus = (status: Task["status"]) => {
@@ -68,7 +68,10 @@ export function TaskBoard({ tasks = [], onTaskUpdate }: TaskBoardProps) {
                           className="transition-opacity"
                           style={provided.draggableProps.style}
                         >
-                          <TaskCard task={task} />
+                          <TaskCard
+                            task={task}
+                            onClick={() => onTaskClick?.(task)}
+                          />
                         </div>
                       )}
                     </Draggable>

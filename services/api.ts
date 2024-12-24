@@ -1,8 +1,6 @@
 import { createClient } from "@/utils/supabase/client";
 import { toast } from "sonner";
 import { Project, Task } from "@/types/database";
-import { edgeApi } from "@/utils/api-client";
-import { generateSlug } from "@/utils/slug";
 
 const supabase = createClient();
 
@@ -38,19 +36,31 @@ export const projectsApi = {
   },
 
   create: async (
-    teamId: string,
-    project: Partial<Project>,
+    team_id: string,
+    data: CreateProjectData,
   ): Promise<Project> => {
-    if (!project.name?.trim()) {
-      throw new ApiError("Project name is required");
-    }
+    try {
+      const { data: project, error } = await supabase
+        .from("projects")
+        .insert({
+          ...data,
+          team_id,
+          created_by: (await supabase.auth.getUser()).data.user?.id,
+          status: data.status || "Planning",
+        })
+        .select()
+        .single();
 
-    return edgeApi.createProject({
-      name: project.name.trim(),
-      description: project.description?.trim() || null,
-      team_id: teamId,
-      slug: generateSlug(project.name),
-    });
+      if (error) {
+        const message = error.message || "Failed to create project";
+        toast.error(message);
+        throw new ApiError(message);
+      }
+
+      return project;
+    } catch (error) {
+      return handleError(error);
+    }
   },
 
   update: async (id: string, updates: Partial<Project>): Promise<Project> => {
@@ -88,14 +98,41 @@ export const projectsApi = {
 
 export const tasksApi = {
   create: async (projectId: string, task: Partial<Task>): Promise<Task> => {
-    return edgeApi.createTask({
-      project_id: projectId,
-      title: task.title!,
-      description: task.description,
-      priority: task.priority,
-      status: task.status,
-      due_date: task.due_date,
-    });
+    try {
+      const { data: newTask, error } = await supabase
+        .from("tasks")
+        .insert({
+          project_id: projectId,
+          title: task.title!,
+          description: task.description,
+          priority: task.priority,
+          status: task.status || "todo",
+          due_date: task.due_date,
+          created_by: (await supabase.auth.getUser()).data.user?.id,
+        })
+        .select("*")
+        .single();
+
+      if (error) throw error;
+      return newTask;
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+
+  fetchProjectTasks: async (projectId: string): Promise<Task[]> => {
+    try {
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      return handleError(error);
+    }
   },
 
   update: async (id: string, updates: Partial<Task>): Promise<Task> => {
@@ -118,12 +155,16 @@ export const tasksApi = {
     }
   },
 
-  delete: async (id: string): Promise<void> => {
+  delete: async (taskId: string): Promise<void> => {
     try {
-      const { error } = await supabase.from("tasks").delete().eq("id", id);
+      const { error } = await supabase
+        .from("tasks")
+        .delete()
+        .eq("id", taskId);
+
       if (error) throw error;
     } catch (error) {
-      handleError(error);
+      return handleError(error);
     }
   },
 
@@ -142,3 +183,13 @@ export const tasksApi = {
     }
   },
 };
+
+interface CreateProjectData {
+  name: string;
+  description?: string | null;
+  team_id: string;
+  slug: string;
+  status?: "Planning" | "In Progress" | "Review" | "Completed";
+  due_date?: string;
+  tasks?: never[];
+}

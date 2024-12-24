@@ -7,9 +7,10 @@ import { CalendarDays, MessageSquare, Users } from "lucide-react";
 
 interface TaskCardProps {
   task: Task;
+  onClick?: () => void;
 }
 
-export function TaskCard({ task }: TaskCardProps) {
+export function TaskCard({ task, onClick }: TaskCardProps) {
   const priorityColors = {
     low: "bg-green-100 text-green-800",
     medium: "bg-yellow-100 text-yellow-800",
@@ -17,7 +18,10 @@ export function TaskCard({ task }: TaskCardProps) {
   };
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm">
+    <div
+      className="rounded-lg border bg-card p-3 hover:bg-accent/50 cursor-pointer"
+      onClick={onClick}
+    >
       <div className="flex items-start justify-between">
         <h4 className="font-medium">{task.title}</h4>
         <Badge className={priorityColors[task.priority]}>{task.priority}</Badge>

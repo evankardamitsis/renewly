@@ -16,8 +16,6 @@ import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PerformanceCard } from "@/components/dashboard/performance-card";
-import { useProjectStore } from "@/store/useProjectStore";
-import { generateSlug } from "@/utils/slug";
 import { tasksApi } from "@/services/api";
 import { useProjectActions } from "@/hooks/useProjectActions";
 
@@ -40,8 +38,7 @@ export default function DashboardPage() {
   const [team, setTeam] = useState<Team | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const router = useRouter();
-  const { addProject, setError } = useProjectStore();
-  const { createProject } = useProjectActions();
+  const { createProject, isCreating } = useProjectActions();
 
   useEffect(() => {
     async function loadDashboardData() {
@@ -114,15 +111,20 @@ export default function DashboardPage() {
     }
   };
 
-  const handleProjectCreate = async (projectData: {
+  const handleProjectCreate = async ({
+    name,
+    description,
+  }: {
     name: string;
-    description: string | null;
+    description: string;
   }) => {
-    try {
-      await createProject(projectData);
+    const { project } = await createProject({
+      name,
+      description,
+    });
+
+    if (project) {
       setIsProjectModalOpen(false);
-    } catch (error) {
-      // Error already handled by hook
     }
   };
 
@@ -293,9 +295,10 @@ export default function DashboardPage() {
         />
 
         <ProjectModal
-          isOpen={isProjectModalOpen}
-          onClose={() => setIsProjectModalOpen(false)}
-          onSave={handleProjectCreate}
+          open={isProjectModalOpen}
+          onOpenChange={setIsProjectModalOpen}
+          onSubmit={handleProjectCreate}
+          loading={isCreating}
         />
       </div>
     </div>

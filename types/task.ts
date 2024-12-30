@@ -2,7 +2,7 @@ import { Task as DatabaseTask } from "./database";
 
 export type TaskStatus = DatabaseTask["status"];
 export type TaskPriority = DatabaseTask["priority"];
-export type RecurringInterval = "none" | "annual" | "6month" | "3month" | "monthly";
+export type RecurringInterval = "annual" | "6month" | "3month" | "monthly";
 
 export interface CustomField {
   label: string;

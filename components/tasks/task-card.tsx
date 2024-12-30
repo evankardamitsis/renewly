@@ -23,7 +23,14 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
       onClick={onClick}
     >
       <div className="flex items-start justify-between">
-        <h4 className="font-medium">{task.title}</h4>
+        <div className="space-y-1">
+          <h4 className="font-medium">{task.title}</h4>
+          {task.is_recurring && (
+            <Badge variant="secondary" className="text-xs">
+              Recurring: {task.recurring_interval}
+            </Badge>
+          )}
+        </div>
         <Badge className={priorityColors[task.priority]}>{task.priority}</Badge>
       </div>
       {task.description && (

@@ -97,24 +97,30 @@ export const projectsApi = {
 };
 
 export const tasksApi = {
-  create: async (projectId: string, task: Partial<Task>): Promise<Task> => {
+  create: async (projectId: string, data: Partial<Task>): Promise<Task> => {
     try {
-      const { data: newTask, error } = await supabase
+      const { data: task, error } = await supabase
         .from("tasks")
-        .insert({
-          project_id: projectId,
-          title: task.title!,
-          description: task.description,
-          priority: task.priority,
-          status: task.status || "todo",
-          due_date: task.due_date,
-          created_by: (await supabase.auth.getUser()).data.user?.id,
-        })
-        .select("*")
+        .insert([
+          {
+            project_id: projectId,
+            title: data.title,
+            description: data.description,
+            priority: data.priority,
+            status: data.status,
+            due_date: data.due_date,
+            custom_fields: data.custom_fields || [],
+            is_recurring: data.is_recurring || false,
+            recurring_interval: data.is_recurring
+              ? data.recurring_interval
+              : null,
+          },
+        ])
+        .select()
         .single();
 
       if (error) throw error;
-      return newTask;
+      return task;
     } catch (error) {
       return handleError(error);
     }
@@ -135,21 +141,24 @@ export const tasksApi = {
     }
   },
 
-  update: async (id: string, updates: Partial<Task>): Promise<Task> => {
+  update: async (taskId: string, updates: Partial<Task>): Promise<Task> => {
     try {
-      const { data, error } = await supabase
+      const { data: task, error } = await supabase
         .from("tasks")
         .update({
           ...updates,
-          updated_at: new Date().toISOString(),
+          custom_fields: updates.custom_fields || [],
+          is_recurring: updates.is_recurring || false,
+          recurring_interval: updates.is_recurring
+            ? updates.recurring_interval
+            : null,
         })
-        .eq("id", id)
+        .eq("id", taskId)
         .select()
         .single();
 
       if (error) throw error;
-      if (!data) throw new ApiError("Task not found");
-      return data as Task;
+      return task;
     } catch (error) {
       return handleError(error);
     }

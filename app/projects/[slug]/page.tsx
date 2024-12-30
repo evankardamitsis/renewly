@@ -227,7 +227,11 @@ export default function ProjectPage() {
           <TabsTrigger value="table">Table</TabsTrigger>
         </TabsList>
         <TabsContent value="board">
-          <TaskBoard tasks={filteredTasks} onTaskClick={handleTaskClick} />
+          <TaskBoard
+            tasks={filteredTasks}
+            onTaskClick={handleTaskClick}
+            onTaskDelete={handleTaskDelete}
+          />
         </TabsContent>
         <TabsContent value="table">
           <TaskTable

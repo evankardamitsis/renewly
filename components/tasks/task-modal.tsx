@@ -20,15 +20,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LoadingSpinner } from "../ui/loading-spinner";
+import { Plus, X } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { CreateTaskData } from "@/hooks/useTaskActions";
 
 interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (task: Partial<Task>) => Promise<void>;
+  onSave: (task: CreateTaskData) => Promise<void>;
   task?: Task;
   projectId?: string;
   loading?: boolean;
 }
+
+interface CustomField {
+  label: string;
+  value: string;
+  type: "string" | "text";
+}
+
+type RecurringInterval = "annual" | "6month" | "3month" | "monthly";
 
 export function TaskModal({
   isOpen,
@@ -47,6 +58,13 @@ export function TaskModal({
   const [dueDate, setDueDate] = useState(task?.due_date || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [isRecurring, setIsRecurring] = useState(task?.is_recurring || false);
+  const [recurringInterval, setRecurringInterval] = useState<RecurringInterval>(
+    (task?.recurring_interval as RecurringInterval) || "monthly"
+  );
+  const [customFields, setCustomFields] = useState<CustomField[]>(
+    (task?.custom_fields as CustomField[]) || []
+  );
 
   useEffect(() => {
     setTitle(task?.title || "");
@@ -56,6 +74,27 @@ export function TaskModal({
     setDueDate(task?.due_date || "");
     setError("");
   }, [task, isOpen]);
+
+  const handleAddCustomField = () => {
+    setCustomFields([
+      ...customFields,
+      { label: "", value: "", type: "string" },
+    ]);
+  };
+
+  const handleRemoveCustomField = (index: number) => {
+    setCustomFields(customFields.filter((_, i) => i !== index));
+  };
+
+  const handleCustomFieldChange = (
+    index: number,
+    field: keyof CustomField,
+    value: string
+  ) => {
+    const newFields = [...customFields];
+    newFields[index] = { ...newFields[index], [field]: value };
+    setCustomFields(newFields);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,6 +114,9 @@ export function TaskModal({
         status,
         due_date: dueDate || null,
         project_id: projectId,
+        is_recurring: isRecurring,
+        recurring_interval: isRecurring ? recurringInterval : null,
+        custom_fields: customFields || [],
       });
       onClose();
     } catch (error) {
@@ -158,6 +200,117 @@ export function TaskModal({
                 onChange={(e) => setDueDate(e.target.value)}
                 disabled={isSubmitting}
               />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium">Recurring Task</label>
+              <div className="flex items-center gap-4">
+                <Switch
+                  checked={isRecurring}
+                  onCheckedChange={setIsRecurring}
+                  disabled={loading}
+                />
+                {isRecurring && (
+                  <Select
+                    value={recurringInterval}
+                    onValueChange={(value: RecurringInterval) =>
+                      setRecurringInterval(value)
+                    }
+                    disabled={loading}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select interval" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="annual">Annual</SelectItem>
+                      <SelectItem value="6month">Every 6 Months</SelectItem>
+                      <SelectItem value="3month">Every 3 Months</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Custom Fields</label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddCustomField}
+                  disabled={loading}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Field
+                </Button>
+              </div>
+
+              {customFields.map((field, index) => (
+                <div key={index} className="flex gap-2 items-start">
+                  <div className="flex-1 space-y-2">
+                    <Input
+                      placeholder="Label"
+                      value={field.label}
+                      onChange={(e) =>
+                        handleCustomFieldChange(index, "label", e.target.value)
+                      }
+                      disabled={loading}
+                    />
+                    {field.type === "text" ? (
+                      <Textarea
+                        placeholder="Value"
+                        value={field.value}
+                        onChange={(e) =>
+                          handleCustomFieldChange(
+                            index,
+                            "value",
+                            e.target.value
+                          )
+                        }
+                        disabled={loading}
+                      />
+                    ) : (
+                      <Input
+                        placeholder="Value"
+                        value={field.value}
+                        onChange={(e) =>
+                          handleCustomFieldChange(
+                            index,
+                            "value",
+                            e.target.value
+                          )
+                        }
+                        disabled={loading}
+                      />
+                    )}
+                    <Select
+                      value={field.type}
+                      onValueChange={(value) =>
+                        handleCustomFieldChange(index, "type", value)
+                      }
+                      disabled={loading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Field type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="string">Short Text</SelectItem>
+                        <SelectItem value="text">Long Text</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveCustomField(index)}
+                    disabled={loading}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
             </div>
           </div>
           <DialogFooter>

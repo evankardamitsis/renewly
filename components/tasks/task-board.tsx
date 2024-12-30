@@ -8,10 +8,13 @@ import {
 } from "@hello-pangea/dnd";
 import { Task } from "@/types/database";
 import { TaskCard } from "./task-card";
+import { useState } from "react";
+import { TaskDrawer } from "./task-drawer";
 
 interface TaskBoardProps {
   tasks: Task[];
   onTaskClick?: (task: Task) => void;
+  onTaskDelete?: (taskId: string) => Promise<void>;
 }
 
 const COLUMNS: { id: Task["status"]; title: string }[] = [
@@ -20,7 +23,21 @@ const COLUMNS: { id: Task["status"]; title: string }[] = [
   { id: "done", title: "Done" },
 ];
 
-export function TaskBoard({ tasks = [], onTaskClick }: TaskBoardProps) {
+export function TaskBoard({
+  tasks = [],
+  onTaskClick,
+  onTaskDelete,
+}: TaskBoardProps) {
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task);
+  };
+
+  const handleClose = () => {
+    setSelectedTask(null);
+  };
+
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination || !onTaskClick) return;
 
@@ -31,7 +48,13 @@ export function TaskBoard({ tasks = [], onTaskClick }: TaskBoardProps) {
     if (!task) return;
 
     const newStatus = destination.droppableId as Task["status"];
-    onTaskClick({ ...task, status: newStatus });
+    onTaskClick({
+      ...task,
+      status: newStatus,
+      is_recurring: task.is_recurring || false,
+      recurring_interval: task.recurring_interval || null,
+      custom_fields: task.custom_fields || [],
+    });
   };
 
   const getTasksByStatus = (status: Task["status"]) => {
@@ -39,50 +62,63 @@ export function TaskBoard({ tasks = [], onTaskClick }: TaskBoardProps) {
   };
 
   return (
-    <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="grid grid-cols-3 gap-4">
-        {COLUMNS.map((column) => (
-          <div
-            key={column.id}
-            className="flex flex-col rounded-lg border bg-muted/50 p-4"
-          >
-            <h3 className="mb-4 text-lg font-semibold">{column.title}</h3>
-            <Droppable droppableId={column.id}>
-              {(provided) => (
-                <div
-                  ref={provided.innerRef}
-                  {...provided.droppableProps}
-                  className="flex flex-col gap-2"
-                >
-                  {getTasksByStatus(column.id).map((task, index) => (
-                    <Draggable
-                      key={task.id}
-                      draggableId={task.id}
-                      index={index}
-                    >
-                      {(provided) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          className="transition-opacity"
-                          style={provided.draggableProps.style}
-                        >
-                          <TaskCard
-                            task={task}
-                            onClick={() => onTaskClick?.(task)}
-                          />
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </div>
-        ))}
-      </div>
-    </DragDropContext>
+    <>
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <div className="grid grid-cols-3 gap-4">
+          {COLUMNS.map((column) => (
+            <div
+              key={column.id}
+              className="flex flex-col rounded-lg border bg-muted/50 p-4"
+            >
+              <h3 className="mb-4 text-lg font-semibold">{column.title}</h3>
+              <Droppable droppableId={column.id}>
+                {(provided) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className="flex flex-col gap-2"
+                  >
+                    {getTasksByStatus(column.id).map((task, index) => (
+                      <Draggable
+                        key={task.id}
+                        draggableId={task.id}
+                        index={index}
+                      >
+                        {(provided) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className="transition-opacity"
+                            style={provided.draggableProps.style}
+                          >
+                            <TaskCard
+                              task={task}
+                              onClick={() => handleTaskClick(task)}
+                            />
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </div>
+          ))}
+        </div>
+      </DragDropContext>
+
+      {selectedTask && (
+        <TaskDrawer
+          task={selectedTask}
+          isOpen={!!selectedTask}
+          onClose={handleClose}
+          onUpdate={onTaskClick}
+          onDelete={onTaskDelete}
+          loading={false}
+        />
+      )}
+    </>
   );
 }

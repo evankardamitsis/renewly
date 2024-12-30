@@ -10,18 +10,28 @@ import { ProjectModal } from "@/components/projects/project-modal";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { 
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 
 export default function ProjectsPage() {
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { projects, isLoading, error, fetchProjects, addProject, deleteProject, setError } =
-    useProjectStore();
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+  const {
+    projects,
+    isLoading,
+    error,
+    fetchProjects,
+    addProject,
+    deleteProject,
+    setError,
+  } = useProjectStore();
 
   useEffect(() => {
     async function loadProjects() {
@@ -86,14 +96,23 @@ export default function ProjectsPage() {
   };
 
   const handleProjectDelete = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation()
+    e.stopPropagation();
+    setProjectToDelete(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!projectToDelete) return;
+
     try {
-      await deleteProject(id)
-      toast.success("Project deleted successfully")
+      await deleteProject(projectToDelete);
+      toast.success("Project deleted successfully");
+      setIsDeleteModalOpen(false);
+      setProjectToDelete(null);
     } catch (err) {
-      toast.error("Failed to delete project")
+      toast.error("Failed to delete project");
     }
-  }
+  };
 
   if (isLoading) {
     return (
@@ -130,7 +149,10 @@ export default function ProjectsPage() {
           >
             <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
               <DropdownMenu>
-                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <DropdownMenuTrigger
+                  asChild
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <Button variant="ghost" size="icon">
                     <MoreVertical className="h-4 w-4" />
                   </Button>
@@ -152,7 +174,7 @@ export default function ProjectsPage() {
             </p>
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">
-                {project.tasks?.length || 0} tasks
+                {project.tasks} tasks
               </span>
               <span className="text-sm text-muted-foreground">
                 Due{" "}
@@ -171,9 +193,17 @@ export default function ProjectsPage() {
       </div>
 
       <ProjectModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleProjectCreate}
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        onSubmit={handleProjectCreate}
+      />
+
+      <ConfirmationModal
+        open={isDeleteModalOpen}
+        onOpenChange={setIsDeleteModalOpen}
+        onConfirm={handleConfirmDelete}
+        title="Delete Project"
+        description="Are you sure you want to delete this project? This action cannot be undone."
       />
     </div>
   );

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { tasksApi } from "@/services/api";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 
 export default function ProjectPage() {
   const params = useParams();
@@ -30,6 +31,7 @@ export default function ProjectPage() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const {
     projects,
@@ -153,7 +155,12 @@ export default function ProjectPage() {
     setFilteredTasks(filtered);
   };
 
-  const handleProjectDelete = async () => {
+  const handleProjectDelete = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
     if (!project) return;
 
     try {
@@ -248,6 +255,14 @@ export default function ProjectPage() {
         onSave={handleTaskCreate}
         loading={isCreating}
         projectId={project.id}
+      />
+
+      <ConfirmationModal
+        open={isDeleteModalOpen}
+        onOpenChange={setIsDeleteModalOpen}
+        onConfirm={handleConfirmDelete}
+        title="Delete Project"
+        description="Are you sure you want to delete this project? This action cannot be undone."
       />
     </div>
   );

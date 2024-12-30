@@ -9,21 +9,26 @@ import { Plus } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { generateSlug } from "@/utils/slug";
 import { toast } from "sonner";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 
 interface ProjectListProps {
   projects: Project[];
   onProjectCreate: (project: Partial<Project>) => Promise<void>;
   onProjectUpdate: (id: string, updates: Partial<Project>) => Promise<void>;
+  onProjectDelete: (id: string) => Promise<void>;
 }
 
 export function ProjectList({
   projects,
   onProjectCreate,
   onProjectUpdate,
+  onProjectDelete,
 }: ProjectListProps) {
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | undefined>();
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
 
   const handleProjectSave = async (project: {
     name: string;
@@ -50,6 +55,19 @@ export function ProjectList({
       toast.error(
         error instanceof Error ? error.message : "Failed to save project"
       );
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!projectToDelete) return;
+
+    try {
+      await onProjectDelete(projectToDelete);
+      toast.success("Project deleted successfully");
+      setIsDeleteModalOpen(false);
+      setProjectToDelete(null);
+    } catch (error) {
+      toast.error("Failed to delete project");
     }
   };
 
@@ -86,13 +104,17 @@ export function ProjectList({
       </div>
 
       <ProjectModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingProject(undefined);
-        }}
-        onSave={handleProjectSave}
-        project={editingProject}
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        onSubmit={handleProjectSave}
+      />
+
+      <ConfirmationModal
+        open={isDeleteModalOpen}
+        onOpenChange={setIsDeleteModalOpen}
+        onConfirm={handleConfirmDelete}
+        title="Delete Project"
+        description="Are you sure you want to delete this project? This action cannot be undone."
       />
     </div>
   );

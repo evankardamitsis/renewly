@@ -22,12 +22,24 @@ export function ActiveProjectsCard() {
         const supabase = createClient();
         const { data: projects, error } = await supabase
           .from("projects")
-          .select("*, tasks(*)")
+          .select(
+            `
+            *,
+            tasks:tasks(count)
+          `
+          )
           .in("status", ["Planning", "In Progress"])
           .order("created_at", { ascending: false });
 
         if (error) throw error;
-        setActiveProjects(projects);
+
+        // Transform the count from tasks aggregation
+        const projectsWithTaskCount = (projects || []).map((project) => ({
+          ...project,
+          tasks: project.tasks[0]?.count || 0,
+        }));
+
+        setActiveProjects(projectsWithTaskCount);
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Failed to load projects";
@@ -81,7 +93,7 @@ export function ActiveProjectsCard() {
                   days left
                 </p>
               </div>
-              <Badge variant="secondary">{project.tasks.length} tasks</Badge>
+              <Badge variant="secondary">{project.tasks} tasks</Badge>
             </div>
           ))}
           {activeProjects.length === 0 && (

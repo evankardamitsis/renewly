@@ -24,12 +24,20 @@ export const projectsApi = {
     try {
       const { data, error } = await supabase
         .from("projects")
-        .select("*, tasks(*)")
+        .select(`
+          *,
+          tasks:tasks(count)
+        `)
         .eq("team_id", teamId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data as Project[];
+
+      // Transform the count from tasks aggregation
+      return (data || []).map((project) => ({
+        ...project,
+        tasks: project.tasks[0]?.count || 0,
+      })) as Project[];
     } catch (error) {
       return handleError(error);
     }

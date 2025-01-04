@@ -1,25 +1,36 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
-import { LoginForm } from "@/components/auth/login-form";
+import { OnboardingForm } from "@/components/auth/onboarding-form";
 
-export default async function LoginPage({
+export default async function OnboardingPage({
   searchParams,
 }: {
   searchParams: { invitation_token?: string };
 }) {
   const supabase = await createClient();
 
+  // Get the current session
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  // If user is already logged in
-  if (session) {
-    // If there's an invitation token, redirect to onboarding
-    if (searchParams.invitation_token) {
-      redirect(`/onboarding?invitation_token=${searchParams.invitation_token}`);
-    }
-    // Otherwise redirect to dashboard
+  // If no session, redirect to login with invitation token if present
+  if (!session) {
+    const redirectUrl = searchParams.invitation_token
+      ? `/login?invitation_token=${searchParams.invitation_token}`
+      : "/login";
+    redirect(redirectUrl);
+  }
+
+  // Check if user already exists in profiles
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", session.user.id)
+    .single();
+
+  // If user already has a profile and completed onboarding, redirect to dashboard
+  if (profile?.has_completed_onboarding) {
     redirect("/dashboard");
   }
 
@@ -34,8 +45,9 @@ export default async function LoginPage({
 
     if (invitation) {
       inviteData = {
-        email: invitation.email,
+        teamId: invitation.team_id,
         teamName: invitation.teams.name,
+        role: invitation.role,
         token: searchParams.invitation_token,
       };
     }
@@ -43,7 +55,7 @@ export default async function LoginPage({
 
   return (
     <div className="flex-1 flex flex-col w-full px-8 sm:max-w-md justify-center gap-2">
-      <LoginForm inviteData={inviteData} />
+      <OnboardingForm user={session.user} inviteData={inviteData} />
     </div>
   );
 }

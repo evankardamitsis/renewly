@@ -186,6 +186,38 @@ export interface Database {
           role?: "admin" | "member";
         };
       };
+      team_invitations: {
+        Row: {
+          id: string;
+          created_at: string;
+          team_id: string;
+          email: string;
+          role: "admin" | "member";
+          invited_by: string;
+          status: "pending" | "accepted" | "declined";
+          accepted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          team_id: string;
+          email: string;
+          role?: "admin" | "member";
+          invited_by: string;
+          status?: "pending" | "accepted" | "declined";
+          accepted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          team_id?: string;
+          email?: string;
+          role?: "admin" | "member";
+          invited_by?: string;
+          status?: "pending" | "accepted" | "declined";
+          accepted_at?: string | null;
+        };
+      };
     };
     Views: {
       [_ in never]: never;

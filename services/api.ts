@@ -201,6 +201,79 @@ export const tasksApi = {
   },
 };
 
+export const teamsApi = {
+  invite: async (
+    teamId: string,
+    email: string,
+    role: "admin" | "member" = "member",
+  ) => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) throw new Error("Not authenticated");
+
+      // Verify user is a team admin
+      const { data: membership } = await supabase
+        .from("team_members")
+        .select("role")
+        .eq("team_id", teamId)
+        .eq("user_id", user.id)
+        .single();
+
+      if (!membership || membership.role !== "admin") {
+        throw new Error("Only team admins can invite members");
+      }
+
+      // Get team details for the invitation
+      const { data: team } = await supabase
+        .from("teams")
+        .select("name")
+        .eq("id", teamId)
+        .single();
+
+      if (!team) throw new Error("Team not found");
+
+      // Generate a secure token
+      const token = crypto.randomUUID();
+
+      // Create the invitation record
+      const { error: inviteError, data: invitation } = await supabase
+        .from("team_invitations")
+        .insert({
+          team_id: teamId,
+          email,
+          role,
+          invited_by: user.id,
+          token,
+        })
+        .select()
+        .single();
+
+      if (inviteError) throw inviteError;
+
+      // Send invitation email
+      const { error: emailError } = await supabase.functions.invoke(
+        "send-invitation-email",
+        {
+          body: {
+            email,
+            teamName: team.name,
+            invitationUrl:
+              `${window.location.origin}/login?invitation_token=${token}`,
+          },
+        },
+      );
+
+      if (emailError) throw emailError;
+
+      return invitation;
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+};
+
 interface CreateProjectData {
   name: string;
   description?: string | null;

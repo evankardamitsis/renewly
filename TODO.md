@@ -4,17 +4,17 @@
 
 ### Backend
 
-- [ ] Integrate with Supabase
-- [ ] Implement Authentication
+- [X] Integrate with Supabase
+- [X] Implement Authentication
 
 ### Task Management
 
-- [ ] Add correct fields for New Task
-- [ ] Create recurring tasks
-- [ ] Implement task reordering within the same column
+- [X] Add correct fields for New Task
+- [X] Create recurring tasks
+- [X] Implement task reordering within the same column
 - [ ] Add task filtering by assignee
 - [ ] Add task search by description
-- [ ] Implement task deletion functionality
+- [X] Implement task deletion functionality
 - [ ] Add task duplication feature
 - [ ] Add batch actions for multiple tasks
 
@@ -27,11 +27,11 @@
 
 ### UI/UX Improvements
 
-- [ ] Add loading states for async operations
-- [ ] Implement error boundaries
-- [ ] Add toast notifications for actions
+- [X] Add loading states for async operations
+- [X] Implement error boundaries
+- [X] Add toast notifications for actions
 - [ ] Improve mobile responsiveness
-- [ ] Add dark/light theme toggle animations
+- [X] Add dark/light theme toggle animations
 
 ## Known Bugs
 
@@ -52,11 +52,3 @@
 - [ ] Add keyboard navigation for task cards
 - [ ] Improve screen reader compatibility
 - [ ] Add ARIA labels for interactive elements
-
-## Technical Debt
-
-- [ ] Add proper error handling
-- [ ] Implement proper TypeScript types for all components
-- [ ] Add unit tests for core functionality
-- [ ] Add E2E tests for critical paths
-- [ ] Implement proper data validation

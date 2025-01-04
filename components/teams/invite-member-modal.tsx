@@ -1,32 +1,40 @@
-import { useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { teamsApi } from '@/services/api'
-import { useAsync } from '@/client/hooks/use-async'
-
+import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { teamsApi } from "@/services/api";
+import { useAsync } from "@/hooks/useAsync";
 interface InviteMemberModalProps {
-  teamId: string
-  isOpen: boolean
-  onClose: () => void
+  teamId: string;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export function InviteMemberModal({ teamId, isOpen, onClose }: InviteMemberModalProps) {
-  const [email, setEmail] = useState('')
-  const { loading, execute } = useAsync()
+export function InviteMemberModal({
+  teamId,
+  isOpen,
+  onClose,
+}: InviteMemberModalProps) {
+  const [email, setEmail] = useState("");
+  const { loading, execute } = useAsync();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     try {
       await execute(
-        teamsApi.invite(teamId, email, 'member'),
-        'Invitation sent successfully'
-      )
-      onClose()
+        teamsApi.invite(teamId, email, "member"),
+        "Invitation sent successfully"
+      );
+      onClose();
     } catch (error) {
       // Error is handled by useAsync
     }
-  }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -43,10 +51,10 @@ export function InviteMemberModal({ teamId, isOpen, onClose }: InviteMemberModal
             required
           />
           <Button type="submit" disabled={loading}>
-            {loading ? 'Sending...' : 'Send Invitation'}
+            {loading ? "Sending..." : "Send Invitation"}
           </Button>
         </form>
       </DialogContent>
     </Dialog>
-  )
-} 
+  );
+}

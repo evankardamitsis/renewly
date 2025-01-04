@@ -11,6 +11,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -35,6 +41,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { User as SupabaseUser } from "@supabase/supabase-js";
+import { teamsApi } from "@/services/api";
+import { useAsync } from "@/hooks/useAsync";
 
 interface Profile {
   display_name: string | null;
@@ -53,6 +61,9 @@ export function Header() {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [team, setTeam] = useState<Team | null>(null);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const { loading: isInviting, execute } = useAsync();
   const router = useRouter();
 
   useEffect(() => {
@@ -172,6 +183,22 @@ export function Header() {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
+  const handleInviteMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile?.current_team_id) return;
+
+    try {
+      await execute(
+        teamsApi.invite(profile.current_team_id, inviteEmail),
+        "Invitation sent successfully"
+      );
+      setInviteEmail("");
+      setIsInviteModalOpen(false);
+    } catch (error) {
+      // Error is handled by useAsync
+    }
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-14 items-center px-4 md:px-6">
@@ -242,11 +269,36 @@ export function Header() {
                   variant="secondary"
                   size="sm"
                   className="h-7 text-xs gap-1"
+                  onClick={() => setIsInviteModalOpen(true)}
                 >
                   <span>Team mate</span>
                   <Plus className="size-3" />
                 </Button>
               </div>
+
+              {/* Invite Modal */}
+              <Dialog
+                open={isInviteModalOpen}
+                onOpenChange={setIsInviteModalOpen}
+              >
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Invite Team Member</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleInviteMember} className="space-y-4">
+                    <Input
+                      type="email"
+                      placeholder="Email address"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      required
+                    />
+                    <Button type="submit" disabled={isInviting}>
+                      {isInviting ? "Sending..." : "Send Invitation"}
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
 
               {/* Actions */}
               <div className="flex items-center gap-2">

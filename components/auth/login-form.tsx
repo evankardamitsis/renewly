@@ -126,6 +126,16 @@ export function LoginForm({ inviteData }: LoginFormProps) {
               disabled={loading}
               minLength={8}
             />
+            {!inviteData && (
+              <div className="text-sm text-right">
+                <Link
+                  href="/reset-password"
+                  className="text-primary hover:underline"
+                >
+                  Forgot Password?
+                </Link>
+              </div>
+            )}
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
             {loading

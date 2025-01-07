@@ -9,10 +9,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { createClient } from "@/utils/supabase/client";
-import { User } from "../../../../server/node_modules/@supabase/supabase-js/dist/module";
+import { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useRouter } from "next/navigation";
+import { updatePassword } from "@/app/actions/auth";
 
 export default function AccountPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -27,6 +30,9 @@ export default function AccountPage() {
   const [updating, setUpdating] = useState(false);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     const supabase = createClient();
@@ -36,6 +42,12 @@ export default function AccountPage() {
       setLoading(false);
     });
   }, []);
+
+  const resetStates = () => {
+    setUpdating(false);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+  };
 
   const handleUpdateEmail = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -47,6 +59,7 @@ export default function AccountPage() {
 
       if (newEmail === user?.email) {
         toast.error("New email must be different from current email");
+        setUpdating(false);
         return;
       }
 
@@ -80,21 +93,36 @@ export default function AccountPage() {
       const password = formData.get("password") as string;
       const confirmPassword = formData.get("confirmPassword") as string;
 
+      // Basic validation
       if (password !== confirmPassword) {
         toast.error("Passwords do not match");
+        setUpdating(false);
         return;
       }
 
-      const supabase = createClient();
-      const { error } = await supabase.auth.updateUser({
-        password,
-      });
+      if (password.length < 6) {
+        toast.error("Password must be at least 6 characters");
+        setUpdating(false);
+        return;
+      }
 
-      if (error) throw error;
+      // Call the server action
+      const result = await updatePassword(password);
 
+      if (result.error) {
+        if (result.error.includes("same_password")) {
+          toast.error(
+            "New password must be different from your current password"
+          );
+          return;
+        }
+        throw new Error(result.error);
+      }
+
+      // Success
       toast.success("Password updated successfully");
       setIsPasswordDialogOpen(false);
-      e.currentTarget.reset();
+      router.push("/login");
     } catch (error) {
       if (error instanceof Error) {
         toast.error(error.message);
@@ -103,6 +131,23 @@ export default function AccountPage() {
       }
     } finally {
       setUpdating(false);
+    }
+  };
+
+  // Reset states when dialogs are closed
+  const handlePasswordDialogChange = (open: boolean) => {
+    if (updating) return; // Don't allow closing while updating
+    setIsPasswordDialogOpen(open);
+    if (!open) {
+      setShowPassword(false);
+      setShowConfirmPassword(false);
+    }
+  };
+
+  const handleEmailDialogChange = (open: boolean) => {
+    setIsEmailDialogOpen(open);
+    if (!open) {
+      resetStates();
     }
   };
 
@@ -156,7 +201,7 @@ export default function AccountPage() {
       </Card>
 
       {/* Email Update Dialog */}
-      <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>
+      <Dialog open={isEmailDialogOpen} onOpenChange={handleEmailDialogChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Update Email Address</DialogTitle>
@@ -176,7 +221,7 @@ export default function AccountPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setIsEmailDialogOpen(false)}
+                onClick={() => handleEmailDialogChange(false)}
               >
                 Cancel
               </Button>
@@ -191,7 +236,7 @@ export default function AccountPage() {
       {/* Password Update Dialog */}
       <Dialog
         open={isPasswordDialogOpen}
-        onOpenChange={setIsPasswordDialogOpen}
+        onOpenChange={handlePasswordDialogChange}
       >
         <DialogContent>
           <DialogHeader>
@@ -203,26 +248,66 @@ export default function AccountPage() {
           </DialogHeader>
           <form onSubmit={handleUpdatePassword} className="space-y-4">
             <div className="space-y-4">
-              <Input
-                type="password"
-                name="password"
-                placeholder="New password"
-                required
-                minLength={6}
-              />
-              <Input
-                type="password"
-                name="confirmPassword"
-                placeholder="Confirm new password"
-                required
-                minLength={6}
-              />
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  placeholder="New password"
+                  required
+                  minLength={6}
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-9 w-9 px-0"
+                  onClick={() => setShowPassword(!showPassword)}
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                  <span className="sr-only">
+                    {showPassword ? "Hide password" : "Show password"}
+                  </span>
+                </Button>
+              </div>
+              <div className="relative">
+                <Input
+                  type={showConfirmPassword ? "text" : "password"}
+                  name="confirmPassword"
+                  placeholder="Confirm new password"
+                  required
+                  minLength={6}
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-9 w-9 px-0"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  tabIndex={-1}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                  <span className="sr-only">
+                    {showConfirmPassword ? "Hide password" : "Show password"}
+                  </span>
+                </Button>
+              </div>
             </div>
             <div className="flex justify-end gap-4">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setIsPasswordDialogOpen(false)}
+                onClick={() => handlePasswordDialogChange(false)}
               >
                 Cancel
               </Button>

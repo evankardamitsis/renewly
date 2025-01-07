@@ -168,14 +168,10 @@ export function Header() {
     try {
       setLoading(true);
       const supabase = createClient();
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      toast.success("Logged out successfully");
-      router.refresh();
+      await supabase.auth.signOut();
+      router.push("/login");
     } catch (error) {
       toast.error("Error signing out");
-    } finally {
-      setLoading(false);
     }
   };
 

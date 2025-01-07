@@ -168,10 +168,16 @@ export function Header() {
     try {
       setLoading(true);
       const supabase = createClient();
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+
+      router.refresh();
       router.push("/login");
     } catch (error) {
+      console.error("Sign out error:", error);
       toast.error("Error signing out");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -317,9 +323,8 @@ export function Header() {
                           onError={(e) =>
                             (e.currentTarget.src = "/placeholder.svg")
                           }
-                          alt={`${
-                            profile?.display_name || "User"
-                          }'s team avatar`}
+                          alt={`${profile?.display_name || "User"
+                            }'s team avatar`}
                           className="object-cover"
                         />
                         <AvatarFallback>

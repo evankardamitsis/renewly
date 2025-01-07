@@ -7,6 +7,14 @@
 - [X] Integrate with Supabase
 - [X] Implement Authentication
 
+### Auth
+
+- [X] Register and Verify with email
+- [] Add more login providers (e.g. Google)
+- [X] Password reset functionality
+- [X] Clean up Auth file structure
+- [X] Use server actions
+
 ### Task Management
 
 - [X] Add correct fields for New Task

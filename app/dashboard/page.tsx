@@ -19,10 +19,28 @@ import { PerformanceCard } from "@/components/dashboard/performance-card";
 import { tasksApi } from "@/services/api";
 import { useProjectActions } from "@/hooks/useProjectActions";
 
+interface TeamMemberData {
+  id: string;
+  user_id: string;
+  role: "admin" | "member";
+  is_super_admin: boolean;
+  profiles: {
+    display_name: string;
+    email: string;
+  }[];
+}
+
 interface Team {
   id: string;
   name: string;
   image_url: string | null;
+  members: {
+    id: string;
+    profile: {
+      display_name: string;
+      email: string;
+    };
+  }[];
 }
 
 interface Profile {
@@ -37,6 +55,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [team, setTeam] = useState<Team | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [userRole, setUserRole] = useState<{ role: string; is_super_admin: boolean } | null>(null);
   const router = useRouter();
   const { createProject, isCreating } = useProjectActions();
 
@@ -64,16 +83,54 @@ export default function DashboardPage() {
         if (profileError) throw profileError;
         setProfile(profileData);
 
+        // Get current user's role from team_members
+        const { data: userRole } = await supabase
+          .from("team_members")
+          .select("role, is_super_admin")
+          .eq("user_id", user.id)
+          .eq("team_id", profileData.current_team_id)
+          .single();
+
+        setUserRole(userRole);
+
         // Get current team if exists
         if (profileData.current_team_id) {
           const { data: teamData, error: teamError } = await supabase
             .from("teams")
-            .select("*")
+            .select(`
+              id,
+              name,
+              image_url,
+              members:team_members(
+                id,
+                user_id,
+                role,
+                is_super_admin,
+                profiles(
+                  display_name,
+                  email
+                )
+              )
+            `)
             .eq("id", profileData.current_team_id)
             .single();
 
           if (teamError) throw teamError;
-          setTeam(teamData);
+
+          // Transform members data to match TeamMember interface
+          const transformedTeam = {
+            ...teamData,
+            members: (teamData.members || [])
+              .filter(m => m.profiles?.length > 0)
+              .map((m: TeamMemberData) => ({
+                id: m.id,
+                user_id: m.user_id,
+                role: m.role,
+                is_super_admin: m.is_super_admin,
+                profile: m.profiles[0]
+              }))
+          };
+          setTeam(transformedTeam);
         }
       } catch (error) {
         console.error("Error loading dashboard:", error);
@@ -200,7 +257,12 @@ export default function DashboardPage() {
         <ActiveProjectsCard />
 
         {/* Team Management Card */}
-        <TeamManagementCard />
+        <TeamManagementCard
+          currentUserRole={{
+            role: userRole?.role || "member",
+            is_super_admin: userRole?.is_super_admin || false
+          }}
+        />
 
         {/* Tasks Card */}
         <Card className="bg-card/50">

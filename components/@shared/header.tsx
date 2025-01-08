@@ -51,12 +51,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { getRoleColor, getRoleDisplay, hasRoleAccess } from "@/utils/roles";
 
 interface Profile {
   display_name: string | null;
   email: string | null;
   current_team_id: string | null;
-  role: "super_admin" | "admin" | "member" | null;
+  role: "admin" | "member" | null;
   is_super_admin?: boolean;
 }
 
@@ -418,17 +419,15 @@ export function Header() {
                         {profile?.role && (
                           <p className={cn(
                             "text-xs font-medium",
-                            profile.is_super_admin
-                              ? "text-purple-500"
-                              : profile.role === "admin"
-                                ? "text-blue-500"
-                                : "text-green-500"
+                            getRoleColor({
+                              role: profile.role,
+                              is_super_admin: profile.is_super_admin || false
+                            })
                           )}>
-                            {profile.is_super_admin
-                              ? "Owner"
-                              : profile.role === "admin"
-                                ? "Admin"
-                                : "Member"}
+                            {getRoleDisplay({
+                              role: profile.role,
+                              is_super_admin: profile.is_super_admin || false
+                            })}
                           </p>
                         )}
                         <p className="text-xs leading-none text-muted-foreground">
@@ -443,6 +442,21 @@ export function Header() {
                         <span>Account settings</span>
                       </Link>
                     </DropdownMenuItem>
+                    {/* Only show team management for admins and above */}
+                    {profile?.role && hasRoleAccess(
+                      {
+                        role: profile.role,
+                        is_super_admin: profile.is_super_admin || false
+                      },
+                      "ADMIN"
+                    ) && (
+                        <DropdownMenuItem asChild>
+                          <Link href="/team/settings" className="cursor-pointer">
+                            <UserIcon className="mr-2 size-4" />
+                            <span>Team settings</span>
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
                     <DropdownMenuItem
                       onClick={handleSignOut}
                       className="text-destructive cursor-pointer"

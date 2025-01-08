@@ -19,6 +19,7 @@ interface ConfirmationModalProps {
   title: string;
   description: string;
   loading?: boolean;
+  confirmButtonText?: string;
 }
 
 export function ConfirmationModal({
@@ -28,6 +29,7 @@ export function ConfirmationModal({
   title,
   description,
   loading = false,
+  confirmButtonText = "Confirm",
 }: ConfirmationModalProps) {
   const handleConfirm = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -48,7 +50,7 @@ export function ConfirmationModal({
             disabled={loading}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {loading ? <LoadingSpinner /> : "Delete"}
+            {loading ? <LoadingSpinner /> : confirmButtonText}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

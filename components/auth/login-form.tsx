@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,17 +9,33 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { toast } from "sonner";
 
-interface LoginFormProps {
-  inviteData?: {
-    email: string;
-    teamName: string;
-    token: string;
-  } | null;
-}
-
-export function LoginForm({ inviteData }: LoginFormProps) {
+export function LoginForm() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const invitationToken = searchParams.get("invitation_token");
+
+  useEffect(() => {
+    // Check if we have an access token in the URL hash
+    const hash = window.location.hash;
+    if (hash && hash.includes("access_token")) {
+      console.log("Found access token in hash");
+
+      // Convert hash parameters to query parameters
+      const params = new URLSearchParams(hash.substring(1));
+      const url = new URL(window.location.href);
+      url.hash = '';
+
+      // Add each parameter from hash to query
+      params.forEach((value, key) => {
+        url.searchParams.set(key, value);
+      });
+
+      // Replace the URL with query parameters
+      console.log("Redirecting with query params:", url.toString());
+      window.location.replace(url.toString());
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -32,45 +48,14 @@ export function LoginForm({ inviteData }: LoginFormProps) {
 
       const supabase = createClient();
 
+      // Regular login flow
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) {
-        // If user doesn't exist and this is an invitation, sign them up
-        if (
-          error.message.includes("Invalid login credentials") &&
-          inviteData &&
-          email === inviteData.email
-        ) {
-          const { error: signUpError } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              emailRedirectTo: `${window.location.origin}/auth/callback?invitation_token=${inviteData.token}`,
-              data: {
-                has_password: true,
-              },
-            },
-          });
+      if (error) throw error;
 
-          if (signUpError) throw signUpError;
-
-          toast.success("Check your email to verify your account");
-          return;
-        }
-
-        throw error;
-      }
-
-      // If this is an invitation and emails match, redirect to onboarding
-      if (inviteData && email === inviteData.email) {
-        router.push(`/onboarding?invitation_token=${inviteData.token}`);
-        return;
-      }
-
-      // Regular login flow
       const { data: profile } = await supabase
         .from("profiles")
         .select("has_completed_onboarding")
@@ -98,9 +83,7 @@ export function LoginForm({ inviteData }: LoginFormProps) {
     <Card>
       <CardHeader>
         <CardTitle>
-          {inviteData
-            ? `Join ${inviteData.teamName}`
-            : "Log in to your account"}
+          {invitationToken ? "Accept Invitation" : "Log in to your account"}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -111,9 +94,8 @@ export function LoginForm({ inviteData }: LoginFormProps) {
               name="email"
               type="email"
               placeholder="Email"
-              defaultValue={inviteData?.email}
               required
-              disabled={loading || !!inviteData}
+              disabled={loading}
             />
           </div>
           <div className="space-y-2">
@@ -121,12 +103,12 @@ export function LoginForm({ inviteData }: LoginFormProps) {
               id="password"
               name="password"
               type="password"
-              placeholder={inviteData ? "Choose a password" : "Password"}
+              placeholder={invitationToken ? "Choose a password" : "Password"}
               required
               disabled={loading}
               minLength={8}
             />
-            {!inviteData && (
+            {!invitationToken && (
               <div className="text-sm text-right">
                 <Link
                   href="/reset-password"
@@ -140,12 +122,12 @@ export function LoginForm({ inviteData }: LoginFormProps) {
           <Button type="submit" className="w-full" disabled={loading}>
             {loading
               ? "Please wait..."
-              : inviteData
-              ? "Create Account"
-              : "Log in"}
+              : invitationToken
+                ? "Accept Invitation"
+                : "Log in"}
           </Button>
         </form>
-        {!inviteData && (
+        {!invitationToken && (
           <div className="mt-4 text-center text-sm">
             Don&apos;t have an account?{" "}
             <Link href="/register" className="text-primary hover:underline">

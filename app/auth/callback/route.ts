@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const token_hash = searchParams.get("token_hash");
     const type = searchParams.get("type") as EmailOtpType | null;
     const code = searchParams.get("code");
+    const invitation_token = searchParams.get("invitation_token");
     const next = searchParams.get("next") ?? "/";
 
     const redirectTo = request.nextUrl.clone();
@@ -22,6 +23,16 @@ export async function GET(request: NextRequest) {
                 token_hash,
             });
             if (!error) {
+                // If this is an invitation, redirect to onboarding
+                if (type === "invite" && invitation_token) {
+                    redirectTo.pathname = "/onboarding";
+                    redirectTo.searchParams.set(
+                        "invitation_token",
+                        invitation_token,
+                    );
+                    return NextResponse.redirect(redirectTo);
+                }
+                // Otherwise handle password reset
                 redirectTo.pathname = "/reset-password/confirm";
                 return NextResponse.redirect(redirectTo);
             }
@@ -33,6 +44,16 @@ export async function GET(request: NextRequest) {
                 code,
             );
             if (!error) {
+                // If this is an invitation, redirect to onboarding
+                if (invitation_token) {
+                    redirectTo.pathname = "/onboarding";
+                    redirectTo.searchParams.set(
+                        "invitation_token",
+                        invitation_token,
+                    );
+                    return NextResponse.redirect(redirectTo);
+                }
+                // Otherwise handle password reset
                 redirectTo.pathname = "/reset-password/confirm";
                 return NextResponse.redirect(redirectTo);
             }

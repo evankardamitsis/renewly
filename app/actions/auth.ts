@@ -234,7 +234,7 @@ export async function addTeamMember({
             );
         }
 
-        // Update invitation status (without timestamp)
+        // Update invitation status
         console.log("Updating invitation status...");
         const { error: inviteUpdateError } = await serviceRoleClient
             .from("team_invitations")
@@ -247,6 +247,20 @@ export async function addTeamMember({
             console.error("Invitation status update error:", inviteUpdateError);
             throw new Error(
                 `Failed to update invitation: ${inviteUpdateError.message}`,
+            );
+        }
+
+        // Mark onboarding as complete
+        console.log("Marking onboarding as complete...");
+        const { error: profileError } = await serviceRoleClient
+            .from("profiles")
+            .update({ has_completed_onboarding: true })
+            .eq("id", userId);
+
+        if (profileError) {
+            console.error("Profile update error:", profileError);
+            throw new Error(
+                `Failed to complete onboarding: ${profileError.message}`,
             );
         }
 

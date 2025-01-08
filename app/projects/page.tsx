@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useProjectStore } from "@/store/useProjectStore";
-import { createClient } from "@/utils/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
 import { Plus, MoreVertical, Trash } from "lucide-react";

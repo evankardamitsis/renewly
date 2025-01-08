@@ -27,7 +27,6 @@ import {
 import { MainNav } from "@/components/@shared/main-nav";
 import {
   Mic,
-  Bell,
   LayoutGrid,
   Plus,
   LogOut,
@@ -36,7 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/@shared/theme-toggle";
-import { createClient } from "@/utils/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -52,6 +51,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { getRoleColor, getRoleDisplay, hasRoleAccess } from "@/utils/roles";
+import { NotificationsMenu } from './notifications-menu'
 
 interface Profile {
   display_name: string | null;
@@ -379,14 +379,10 @@ export function Header() {
                 </DialogContent>
               </Dialog>
 
-              {/* Actions */}
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon">
-                  <Bell className="size-5" />
-                </Button>
-              </div>
+              {/* Notifications */}
+              <NotificationsMenu />
 
-              {/* User */}
+              {/* User Menu */}
               <div className="flex items-center gap-4">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -468,29 +464,29 @@ export function Header() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
+
+              {/* Menu */}
+              <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="ml-2"
+                    onClick={toggleSidebar}
+                  >
+                    <LayoutGrid className="size-5" />
+                    <span className="sr-only">Toggle menu</span>
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-[300px] sm:w-[400px] p-0">
+                  <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+                  <Sidebar>
+                    <MainNav />
+                  </Sidebar>
+                </SheetContent>
+              </Sheet>
             </>
           )}
-
-          {/* Menu */}
-          <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="ml-2"
-                onClick={toggleSidebar}
-              >
-                <LayoutGrid className="size-5" />
-                <span className="sr-only">Toggle menu</span>
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-[300px] sm:w-[400px] p-0">
-              <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-              <Sidebar>
-                <MainNav />
-              </Sidebar>
-            </SheetContent>
-          </Sheet>
         </div>
       </div>
     </header>

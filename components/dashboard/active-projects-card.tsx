@@ -8,7 +8,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { calculateDaysLeft } from "@/utils/date";
 import { toast } from "sonner";
 import { Project } from "@/types/database";
-import { createClient } from "@/utils/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 export function ActiveProjectsCard() {
   const router = useRouter();

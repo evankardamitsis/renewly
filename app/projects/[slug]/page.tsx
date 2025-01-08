@@ -14,7 +14,7 @@ import { TaskModal } from "@/components/tasks/task-modal";
 import { Task } from "@/types/database";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { createClient } from "@/utils/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -204,7 +204,7 @@ export default function ProjectPage() {
               onChange={(e) => handleSearch(e.target.value)}
             />
           </div>
-          <TaskFilters onSortChange={() => {}} onFilterChange={() => {}} />
+          <TaskFilters onSortChange={() => { }} onFilterChange={() => { }} />
           <Button onClick={() => setIsTaskModalOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Task
@@ -228,20 +228,20 @@ export default function ProjectPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="board" className="w-full">
+      <Tabs defaultValue="table" className="w-full">
         <TabsList>
-          <TabsTrigger value="board">Board</TabsTrigger>
           <TabsTrigger value="table">Table</TabsTrigger>
+          <TabsTrigger value="board">Board</TabsTrigger>
         </TabsList>
-        <TabsContent value="board">
-          <TaskBoard
+        <TabsContent value="table">
+          <TaskTable
             tasks={filteredTasks}
             onTaskClick={handleTaskClick}
             onTaskDelete={handleTaskDelete}
           />
         </TabsContent>
-        <TabsContent value="table">
-          <TaskTable
+        <TabsContent value="board">
+          <TaskBoard
             tasks={filteredTasks}
             onTaskClick={handleTaskClick}
             onTaskDelete={handleTaskDelete}

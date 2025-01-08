@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Project, Task } from "@/types/database";
 import { sendTeamInvite } from "@/app/actions/auth";

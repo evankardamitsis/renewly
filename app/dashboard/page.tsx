@@ -12,7 +12,7 @@ import { Task } from "@/types/database";
 import { ChatCard } from "@/components/dashboard/chat-card";
 import { ActiveProjectsCard } from "@/components/dashboard/active-projects-card";
 import { TeamManagementCard } from "@/components/team-management/team-management-card";
-import { createClient } from "@/utils/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PerformanceCard } from "@/components/dashboard/performance-card";

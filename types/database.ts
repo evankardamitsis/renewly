@@ -239,3 +239,22 @@ export interface CustomField {
 
 export type Project = Database["public"]["Tables"]["projects"]["Row"];
 export type Task = Database["public"]["Tables"]["tasks"]["Row"];
+
+export type NotificationType =
+  | "DUE_DATE_APPROACHING"
+  | "TASK_ASSIGNED"
+  | "TASK_COMPLETED"
+  | "TASK_UPDATED";
+
+export interface Notification {
+  id: string;
+  created_at: string;
+  user_id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  task_id?: string;
+  project_id?: string;
+  read: boolean;
+  action_url?: string;
+}

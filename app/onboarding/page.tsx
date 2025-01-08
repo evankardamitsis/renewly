@@ -140,7 +140,6 @@ export default function OnboardingPage() {
       const { error: teamError } = await addTeamMember({
         userId: user.id,
         teamId: inviteData.team_id,
-        role: inviteData.role,
         email: user.email!,
       });
 

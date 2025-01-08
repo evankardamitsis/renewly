@@ -43,11 +43,21 @@ import { toast } from "sonner";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { teamsApi } from "@/services/api";
 import { useAsync } from "@/hooks/useAsync";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 interface Profile {
   display_name: string | null;
   email: string | null;
   current_team_id: string | null;
+  role: "super_admin" | "admin" | "member" | null;
+  is_super_admin?: boolean;
 }
 
 interface Team {
@@ -63,6 +73,7 @@ export function Header() {
   const [team, setTeam] = useState<Team | null>(null);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
   const { loading: isInviting, execute } = useAsync();
   const router = useRouter();
 
@@ -78,15 +89,34 @@ export function Header() {
 
         setUser(user);
 
+        // First get the profile to get the current_team_id
         const { data: profileData } = await supabase
           .from("profiles")
           .select("display_name, email, current_team_id")
           .eq("id", user.id)
           .single();
 
-        setProfile(profileData);
+        if (!profileData) return;
 
-        if (profileData?.current_team_id) {
+        // Then get the team member role using both user ID and team ID
+        const { data: teamMemberData } = await supabase
+          .from("team_members")
+          .select("role, is_super_admin")
+          .eq("user_id", user.id)
+          .eq("team_id", profileData.current_team_id)
+          .single();
+
+        const transformedProfile = {
+          display_name: profileData.display_name,
+          email: profileData.email,
+          current_team_id: profileData.current_team_id,
+          role: teamMemberData?.role || null,
+          is_super_admin: teamMemberData?.is_super_admin || false,
+        };
+
+        setProfile(transformedProfile);
+
+        if (profileData.current_team_id) {
           const { data: teamData } = await supabase
             .from("teams")
             .select("image_url")
@@ -122,13 +152,34 @@ export function Header() {
     } = supabase.auth.onAuthStateChange(async (_, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
+        // First get the profile to get the current_team_id
         const { data: profileData } = await supabase
           .from("profiles")
           .select("display_name, email, current_team_id")
           .eq("id", session.user.id)
           .single();
 
-        if (profileData?.current_team_id) {
+        if (!profileData) return;
+
+        // Then get the team member role using both user ID and team ID
+        const { data: teamMemberData } = await supabase
+          .from("team_members")
+          .select("role, is_super_admin")
+          .eq("user_id", session.user.id)
+          .eq("team_id", profileData.current_team_id)
+          .single();
+
+        const transformedProfile = {
+          display_name: profileData.display_name,
+          email: profileData.email,
+          current_team_id: profileData.current_team_id,
+          role: teamMemberData?.role || null,
+          is_super_admin: teamMemberData?.is_super_admin || false,
+        };
+
+        setProfile(transformedProfile);
+
+        if (profileData.current_team_id) {
           const { data: teamData } = await supabase
             .from("teams")
             .select("image_url")
@@ -152,7 +203,6 @@ export function Header() {
           }
           setTeam(teamData);
         }
-        setProfile(profileData);
       } else {
         setProfile(null);
         setTeam(null);
@@ -191,10 +241,11 @@ export function Header() {
 
     try {
       await execute(
-        teamsApi.invite(profile.current_team_id, inviteEmail),
+        teamsApi.invite(profile.current_team_id, inviteEmail, inviteRole),
         "Invitation sent successfully"
       );
       setInviteEmail("");
+      setInviteRole("member");
       setIsInviteModalOpen(false);
     } catch (error) {
       // Error is handled by useAsync
@@ -288,13 +339,38 @@ export function Header() {
                     <DialogTitle>Invite Team Member</DialogTitle>
                   </DialogHeader>
                   <form onSubmit={handleInviteMember} className="space-y-4">
-                    <Input
-                      type="email"
-                      placeholder="Email address"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      required
-                    />
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Email</Label>
+                        <Input
+                          type="email"
+                          placeholder="Email address"
+                          value={inviteEmail}
+                          onChange={(e) => setInviteEmail(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Role</Label>
+                        <Select
+                          value={inviteRole}
+                          onValueChange={(value: "member" | "admin") => setInviteRole(value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="member">Member</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-sm text-muted-foreground">
+                          {inviteRole === "admin"
+                            ? "Admins can manage team members and settings"
+                            : "Members can view and collaborate on projects"}
+                        </p>
+                      </div>
+                    </div>
                     <Button type="submit" disabled={isInviting}>
                       {isInviting ? "Sending..." : "Send Invitation"}
                     </Button>
@@ -323,8 +399,7 @@ export function Header() {
                           onError={(e) =>
                             (e.currentTarget.src = "/placeholder.svg")
                           }
-                          alt={`${profile?.display_name || "User"
-                            }'s team avatar`}
+                          alt={`${profile?.display_name || "User"}'s team avatar`}
                           className="object-cover"
                         />
                         <AvatarFallback>
@@ -340,6 +415,22 @@ export function Header() {
                         <p className="text-sm font-medium leading-none">
                           {profile?.display_name || user.email}
                         </p>
+                        {profile?.role && (
+                          <p className={cn(
+                            "text-xs font-medium",
+                            profile.is_super_admin
+                              ? "text-purple-500"
+                              : profile.role === "admin"
+                                ? "text-blue-500"
+                                : "text-green-500"
+                          )}>
+                            {profile.is_super_admin
+                              ? "Owner"
+                              : profile.role === "admin"
+                                ? "Admin"
+                                : "Member"}
+                          </p>
+                        )}
                         <p className="text-xs leading-none text-muted-foreground">
                           {user.email}
                         </p>

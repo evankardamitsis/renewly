@@ -194,12 +194,10 @@ export async function createProfile({
 export async function addTeamMember({
     userId,
     teamId,
-    role,
     email,
 }: {
     userId: string;
     teamId: string;
-    role: "admin" | "member";
     email: string;
 }) {
     try {
@@ -225,14 +223,18 @@ export async function addTeamMember({
             throw new Error("No valid invitation found");
         }
 
-        // Add user to team
-        console.log("Adding user to team...", { userId, teamId, role });
+        // Add user to team with the role from the invitation
+        console.log("Adding user to team...", {
+            userId,
+            teamId,
+            role: invitation.role,
+        });
         const { error: memberError } = await serviceRoleClient
             .from("team_members")
             .insert({
                 team_id: teamId,
                 user_id: userId,
-                role: role,
+                role: invitation.role, // Use the role from the invitation
             });
 
         if (memberError) {
@@ -271,7 +273,10 @@ export async function addTeamMember({
             console.log("Marking onboarding as complete...");
             const { error: profileError } = await serviceRoleClient
                 .from("profiles")
-                .update({ has_completed_onboarding: true })
+                .update({
+                    has_completed_onboarding: true,
+                    role: invitation.role, // Set the role in the profile as well
+                })
                 .eq("id", userId);
 
             if (profileError) {

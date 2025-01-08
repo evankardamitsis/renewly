@@ -135,27 +135,7 @@ export default function OnboardingPage() {
         shouldRedirectToLogin = true;
       }
 
-      // Create user profile using server action
-      console.log("Creating profile...");
-      const { error: profileError } = await createProfile({
-        userId: user.id,
-        email: user.email!,
-        displayName: formData.displayName.trim(),
-        role: formData.role.trim(),
-        teamId: inviteData.team_id,
-        hasCompletedOnboarding: false,
-      });
-
-      if (profileError) {
-        console.error("Profile creation error:", profileError);
-        toast.error(profileError === "Invalid or expired invitation"
-          ? "Your invitation has expired. Please request a new one."
-          : "Failed to create profile. Please try again.");
-        return;
-      }
-      console.log("Profile created successfully");
-
-      // Add user to the invited team using server action
+      // Add user to the invited team using server action first
       console.log("Adding to team...");
       const { error: teamError } = await addTeamMember({
         userId: user.id,
@@ -177,19 +157,25 @@ export default function OnboardingPage() {
       }
       console.log("Added to team successfully");
 
-      // Now that everything is set up, mark onboarding as complete
-      console.log("Completing onboarding...");
-      const { error: completeOnboardingError } = await supabase
-        .from("profiles")
-        .update({ has_completed_onboarding: true })
-        .eq("id", user.id);
+      // Create user profile using server action
+      console.log("Creating profile...");
+      const { error: profileError } = await createProfile({
+        userId: user.id,
+        email: user.email!,
+        displayName: formData.displayName.trim(),
+        role: formData.role.trim(),
+        teamId: inviteData.team_id,
+        hasCompletedOnboarding: true,
+      });
 
-      if (completeOnboardingError) {
-        console.error("Complete onboarding error:", completeOnboardingError);
-        toast.error("Failed to complete onboarding. Please try again.");
+      if (profileError) {
+        console.error("Profile creation error:", profileError);
+        toast.error(profileError === "Invalid or expired invitation"
+          ? "Your invitation has expired. Please request a new one."
+          : "Failed to create profile. Please try again.");
         return;
       }
-      console.log("Onboarding completed successfully");
+      console.log("Profile created successfully");
 
       // Only navigate after all operations are successful
       toast.success("Welcome to the team!");

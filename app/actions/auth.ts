@@ -82,18 +82,39 @@ export async function sendTeamInvite({
 
         if (teamError) throw teamError;
 
+        // Check for existing invitation
+        const { data: existingInvite, error: checkError } = await supabase
+            .from("team_invitations")
+            .select("status")
+            .eq("team_id", teamId)
+            .eq("email", email)
+            .single();
+
+        if (checkError && checkError.code !== "PGRST116") throw checkError;
+
+        // If there's any existing invitation, throw error
+        if (existingInvite) {
+            throw new Error(
+                "An invitation has already been sent to this email",
+            );
+        }
+
         // Generate a unique token for the invitation
         const token = crypto.randomUUID();
 
-        // Create the invitation record
+        // Create or update the invitation record
         const { error: inviteError } = await supabase
             .from("team_invitations")
-            .insert({
+            .upsert({
                 team_id: teamId,
                 email,
                 role,
                 invited_by: user.id,
                 token,
+                status: "pending",
+            }, {
+                onConflict: "team_id,email",
+                ignoreDuplicates: false,
             });
 
         if (inviteError) throw inviteError;
@@ -144,19 +165,6 @@ export async function createProfile({
     try {
         // Use service role client for admin operations during onboarding
         const serviceRoleClient = createServiceRoleClient();
-
-        // Verify the user has a valid invitation
-        const { data: invitation, error: inviteError } = await serviceRoleClient
-            .from("team_invitations")
-            .select("*")
-            .eq("team_id", teamId)
-            .eq("email", email)
-            .eq("status", "pending")
-            .single();
-
-        if (inviteError || !invitation) {
-            throw new Error("Invalid or expired invitation");
-        }
 
         const { data: profile, error: profileError } = await serviceRoleClient
             .from("profiles")
@@ -250,18 +258,28 @@ export async function addTeamMember({
             );
         }
 
-        // Mark onboarding as complete
-        console.log("Marking onboarding as complete...");
-        const { error: profileError } = await serviceRoleClient
+        // Check if profile exists
+        console.log("Checking profile...");
+        const { data: profile } = await serviceRoleClient
             .from("profiles")
-            .update({ has_completed_onboarding: true })
-            .eq("id", userId);
+            .select("*")
+            .eq("id", userId)
+            .single();
 
-        if (profileError) {
-            console.error("Profile update error:", profileError);
-            throw new Error(
-                `Failed to complete onboarding: ${profileError.message}`,
-            );
+        // Only update has_completed_onboarding if profile exists
+        if (profile) {
+            console.log("Marking onboarding as complete...");
+            const { error: profileError } = await serviceRoleClient
+                .from("profiles")
+                .update({ has_completed_onboarding: true })
+                .eq("id", userId);
+
+            if (profileError) {
+                console.error("Profile update error:", profileError);
+                throw new Error(
+                    `Failed to complete onboarding: ${profileError.message}`,
+                );
+            }
         }
 
         return { success: true };

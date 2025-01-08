@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/@shared/theme-provider";
-import { Header } from "@/components/@shared/header";
 import { Toaster } from "sonner";
 
 // Configure Inter font with Latin subset
@@ -23,7 +22,8 @@ export const metadata: Metadata = {
  * - Font configuration
  * - Theme provider
  * - Global layout structure
- * - Header component
+ *
+ * The header is handled by route group layouts ((auth) and (main))
  *
  * @param {Object} props - Component props
  * @param {React.ReactNode} props.children - Page content to be rendered
@@ -44,10 +44,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <div className="relative flex min-h-screen flex-col">
-            <Header />
-            <div className="flex flex-1">
-              <main className="flex-1">{children}</main>
-            </div>
+            {children}
           </div>
         </ThemeProvider>
         <Toaster />

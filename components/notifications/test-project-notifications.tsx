@@ -1,22 +1,31 @@
-import { useState } from "react"
-import { createClient } from "@/lib/supabase/client"
+"use client"
+
 import { Button } from "@/components/ui/button"
+import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import { useState, useRef } from "react"
 import { generateSlug } from "@/utils/slug"
 
 export function TestProjectNotifications() {
-    const [isCreating, setIsCreating] = useState(false)
+    const [loading, setLoading] = useState(false)
+    const requestInProgress = useRef(false)
 
-    const createProjectNotification = async () => {
-        if (isCreating) return
+
+    const handleTestNotification = async () => {
+        if (loading || requestInProgress.current) {
+            toast.error("A test is already in progress")
+            return
+        }
+
+        requestInProgress.current = true
+
         try {
-            setIsCreating(true)
+            setLoading(true)
             const supabase = createClient()
+
+            // Get current user
             const { data: { user } } = await supabase.auth.getUser()
-            if (!user) {
-                console.error("No user found")
-                return
-            }
+            if (!user) throw new Error("User not found")
 
             // Get the user's current team
             const { data: profile } = await supabase
@@ -29,10 +38,10 @@ export function TestProjectNotifications() {
                 throw new Error("No team selected")
             }
 
-            const projectName = `Test Project ${new Date().toLocaleTimeString()}`
+            const projectName = `Test Project ${Date.now()}`
 
             // Create a new project
-            const { data: project, error: projectError } = await supabase
+            const { error: projectError } = await supabase
                 .from("projects")
                 .insert({
                     name: projectName,
@@ -46,51 +55,42 @@ export function TestProjectNotifications() {
                 .select()
                 .single()
 
-            if (projectError) {
-                console.error("Error creating project:", projectError)
-                throw projectError
-            }
+            if (projectError) throw projectError
 
-            // Create notification for all team members
-            const { data: teamMembers, error: teamError } = await supabase
-                .from("team_members")
-                .select("user_id")
-                .eq("team_id", profile.current_team_id)
-
-            if (teamError) throw teamError
-
-            // Create notifications for each team member
-            const notifications = teamMembers.map(member => ({
-                user_id: member.user_id,
-                type: "PROJECT_CREATED",
-                title: "New Project Created",
-                message: `Project "${project.name}" has been created`,
-                project_id: project.id,
-                read: false,
-                action_url: `/projects/${project.slug}`
-            }))
-
+            // Create a notification for the test project
             const { error: notificationError } = await supabase
                 .from("notifications")
-                .insert(notifications)
+                .insert({
+                    user_id: user.id,
+                    type: "PROJECT_CREATED",
+                    title: "New Project Created",
+                    message: `Project "${projectName}" has been created`,
+                    read: false,
+                    action_url: `/projects`
+                })
 
             if (notificationError) throw notificationError
-            toast.success("Project notification created for all team members")
+
+            // Wait a bit for the notification to be created
+            await new Promise(resolve => setTimeout(resolve, 1000))
+
+            toast.success("Test project notification created!")
         } catch (error) {
-            console.error("Error:", error)
-            toast.error("Failed to create project notification")
+            console.error("Error creating test project notification:", error)
+            toast.error(error instanceof Error ? error.message : "Failed to create test notification")
         } finally {
-            setIsCreating(false)
+            setLoading(false)
+            requestInProgress.current = false
         }
     }
 
     return (
         <Button
-            onClick={createProjectNotification}
-            disabled={isCreating}
             variant="outline"
+            onClick={handleTestNotification}
+            disabled={loading || requestInProgress.current}
         >
-            Test Project Notification
+            {loading ? "Creating..." : "Create Test Project"}
         </Button>
     )
 } 

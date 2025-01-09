@@ -107,6 +107,40 @@ serve(async (req) => {
                         .single();
 
                 if (notificationError) throw notificationError;
+
+                // Trigger email notification
+                try {
+                    const emailResponse = await fetch(
+                        `${
+                            Deno.env.get("SUPABASE_URL")
+                        }/functions/v1/send-notification-email`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": `Bearer ${
+                                    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+                                }`,
+                            },
+                            body: JSON.stringify({
+                                notification_id: notification.id,
+                            }),
+                        },
+                    );
+
+                    if (!emailResponse.ok) {
+                        console.error(
+                            "Failed to trigger email notification:",
+                            await emailResponse.text(),
+                        );
+                    }
+                } catch (emailError) {
+                    console.error(
+                        "Error triggering email notification:",
+                        emailError,
+                    );
+                }
+
                 notifications.push(notification);
             } catch (error) {
                 console.error(`Error processing task ${task.id}:`, error);

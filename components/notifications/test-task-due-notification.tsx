@@ -5,11 +5,12 @@ import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { useState, useRef } from "react"
 
-export function TestOverdueNotifications() {
+export function TestTaskDueNotification() {
     const [loading, setLoading] = useState(false)
     const requestInProgress = useRef(false)
 
     const handleTestNotification = async () => {
+        // Double check to prevent multiple submissions
         if (loading || requestInProgress.current) {
             toast.error("A test is already in progress")
             return
@@ -34,15 +35,15 @@ export function TestOverdueNotifications() {
 
             if (projectError) throw new Error("No projects found. Please create a project first.")
 
-            // Create a test task that is overdue
+            // Create a test task due soon
             const dueDate = new Date()
-            dueDate.setDate(dueDate.getDate() - 1) // Due yesterday
+            dueDate.setDate(dueDate.getDate() + 1) // Due tomorrow
 
             const { data: task, error: taskError } = await supabase
                 .from("tasks")
                 .insert({
-                    title: `Test Overdue Task ${Date.now()}`, // Make title unique
-                    description: "This is a test task that is overdue",
+                    title: `Test Task Due Soon ${Date.now()}`, // Make title unique
+                    description: "This is a test task that is due soon",
                     project_id: projects.id,
                     assigned_to: user.id,
                     created_by: user.id,
@@ -54,9 +55,9 @@ export function TestOverdueNotifications() {
 
             if (taskError) throw taskError
 
-            // Trigger the check-overdue-tasks function
+            // Trigger the check-due-dates function
             const response = await fetch(
-                `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/check-overdue-tasks`,
+                `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/check-due-dates`,
                 {
                     method: "POST",
                     headers: {
@@ -77,9 +78,9 @@ export function TestOverdueNotifications() {
             // Wait a bit for the notification to be created
             await new Promise(resolve => setTimeout(resolve, 1000))
 
-            toast.success("Test overdue notification created!")
+            toast.success("Test task due notification created!")
         } catch (error) {
-            console.error("Error creating test overdue notification:", error)
+            console.error("Error creating test task due notification:", error)
             toast.error(error instanceof Error ? error.message : "Failed to create test notification")
         } finally {
             setLoading(false)
@@ -93,7 +94,7 @@ export function TestOverdueNotifications() {
             onClick={handleTestNotification}
             disabled={loading || requestInProgress.current}
         >
-            {loading ? "Creating..." : "Create Test Overdue"}
+            {loading ? "Creating..." : "Create Test Task"}
         </Button>
     )
 } 

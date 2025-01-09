@@ -244,7 +244,12 @@ export type NotificationType =
   | "DUE_DATE_APPROACHING"
   | "TASK_ASSIGNED"
   | "TASK_COMPLETED"
-  | "TASK_UPDATED";
+  | "TASK_UPDATED"
+  | "PROJECT_CREATED"
+  | "TEAM_MEMBER_ADDED"
+  | "DUE_DATE"
+  | "TASK_OVERDUE"
+  | "TEST_EMAIL";
 
 export interface Notification {
   id: string;

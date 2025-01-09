@@ -1,64 +1,75 @@
-import { useState } from "react"
-import { createClient } from "@/lib/supabase/client"
+"use client"
+
 import { Button } from "@/components/ui/button"
+import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import { useState, useRef } from "react"
 
 export function TestTeamNotifications() {
-    const [isCreating, setIsCreating] = useState(false)
+    const [loading, setLoading] = useState(false)
+    const requestInProgress = useRef(false)
 
-    const createTeamMemberNotification = async () => {
-        if (isCreating) return
+    const handleTestNotification = async () => {
+        if (loading || requestInProgress.current) {
+            toast.error("A test is already in progress")
+            return
+        }
+
+        requestInProgress.current = true
+
         try {
-            setIsCreating(true)
+            setLoading(true)
             const supabase = createClient()
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) {
-                console.error("No user found")
-                return
-            }
 
-            // Get the first available project
-            const { data: project, error: projectError } = await supabase
-                .from("projects")
-                .select("id")
-                .limit(1)
+            // Get current user
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) throw new Error("User not found")
+
+            // Get the user's current team
+            const { data: profile } = await supabase
+                .from("profiles")
+                .select("current_team_id")
+                .eq("id", user.id)
                 .single()
 
-            if (projectError) {
-                console.error("Error fetching project:", projectError)
-                return
+            if (!profile?.current_team_id) {
+                throw new Error("No team selected")
             }
 
-            // Create a notification for new team member
+            // Create a test team member notification
             const { error: notificationError } = await supabase
                 .from("notifications")
                 .insert({
                     user_id: user.id,
                     type: "TEAM_MEMBER_ADDED",
                     title: "New Team Member",
-                    message: `${user.email} has been added to the team`,
-                    project_id: project.id,
+                    message: "A new member has joined the team",
                     read: false,
                     action_url: `/team`
                 })
 
             if (notificationError) throw notificationError
-            toast.success("Team member notification created")
+
+            // Wait a bit for the notification to be created
+            await new Promise(resolve => setTimeout(resolve, 1000))
+
+            toast.success("Test team notification created!")
         } catch (error) {
-            console.error("Error:", error)
-            toast.error("Failed to create team member notification")
+            console.error("Error creating test team notification:", error)
+            toast.error(error instanceof Error ? error.message : "Failed to create test notification")
         } finally {
-            setIsCreating(false)
+            setLoading(false)
+            requestInProgress.current = false
         }
     }
 
     return (
         <Button
-            onClick={createTeamMemberNotification}
-            disabled={isCreating}
             variant="outline"
+            onClick={handleTestNotification}
+            disabled={loading || requestInProgress.current}
         >
-            Test Team Member Notification
+            {loading ? "Creating..." : "Create Test Team"}
         </Button>
     )
 } 

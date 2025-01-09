@@ -1,6 +1,5 @@
 import { AllNotifications } from "@/components/notifications/all-notifications"
 import { createClient } from "@/lib/supabase/server"
-
 import { redirect } from "next/navigation"
 
 export default async function NotificationsPage() {

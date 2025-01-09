@@ -19,41 +19,79 @@ serve(async (req: Request) => {
     }
 
     try {
+        console.log("Starting email notification process...");
+
+        // Check required environment variables
+        const supabaseUrl = Deno.env.get("SUPABASE_URL");
+        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+        const resendApiKey = Deno.env.get("RESEND_API_KEY");
+        const siteUrl = Deno.env.get("SITE_URL") || "http://localhost:3000";
+
+        console.log("Environment variables check:", {
+            hasSupabaseUrl: !!supabaseUrl,
+            hasSupabaseKey: !!supabaseServiceKey,
+            hasResendKey: !!resendApiKey,
+            siteUrl,
+        });
+
+        if (!supabaseUrl || !supabaseServiceKey) {
+            throw new Error("Missing required Supabase environment variables");
+        }
+
+        if (!resendApiKey) {
+            throw new Error("Missing RESEND_API_KEY environment variable");
+        }
+
         // Initialize Supabase client
-        const supabase = createClient(
-            Deno.env.get("SUPABASE_URL") ?? "",
-            Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-        );
+        console.log("Initializing Supabase client...");
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
         // Initialize Resend
-        const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+        console.log("Initializing Resend client...");
+        const resend = new Resend(resendApiKey);
 
         // Get notification ID from request
+        console.log("Parsing request body...");
         const { notification_id } = await req.json() as NotificationRequest;
+        console.log("Notification ID:", notification_id);
+
         if (!notification_id) {
             throw new Error("notification_id is required");
         }
 
         // Get notification details
+        console.log("Fetching notification details...");
         const { data: notification, error: notificationError } = await supabase
             .from("notifications")
             .select(`
                 *,
-                user:user_id (
+                profile:user_id (
                     email
                 )
             `)
             .eq("id", notification_id)
             .single();
 
-        if (notificationError) throw notificationError;
+        if (notificationError) {
+            console.error("Error fetching notification:", notificationError);
+            throw notificationError;
+        }
         if (!notification) throw new Error("Notification not found");
-        if (!notification.user?.email) throw new Error("User email not found");
+        if (!notification.profile?.email) {
+            throw new Error("User email not found");
+        }
+
+        console.log("Found notification:", {
+            id: notification.id,
+            type: notification.type,
+            hasEmail: !!notification.profile.email,
+        });
 
         // Send email
+        console.log("Sending email...");
         const { error: emailError } = await resend.emails.send({
-            from: "Renewly <hello@renewlyhq.com>",
-            to: [notification.user.email],
+            from: "Renewly <notifications@renewlyhq.com>",
+            to: [notification.profile.email],
             subject: notification.title,
             html: `
                 <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
@@ -61,16 +99,12 @@ serve(async (req: Request) => {
                     <p>${notification.message}</p>
                     ${
                 notification.action_url
-                    ? `
-                        <p style="margin-top: 20px;">
-                            <a href="${
-                        Deno.env.get("SITE_URL")
-                    }${notification.action_url}" 
+                    ? `<p style="margin-top: 20px;">
+                            <a href="${siteUrl}${notification.action_url}" 
                                style="background-color: #0284c7; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
                                 View Details
                             </a>
-                        </p>
-                    `
+                        </p>`
                     : ""
             }
                     <p style="margin-top: 20px; font-size: 14px; color: #666;">
@@ -80,16 +114,12 @@ serve(async (req: Request) => {
             `,
         });
 
-        if (emailError) throw emailError;
+        if (emailError) {
+            console.error("Error sending email:", emailError);
+            throw emailError;
+        }
 
-        // Update notification to mark email as sent
-        const { error: updateError } = await supabase
-            .from("notifications")
-            .update({ email_sent: true })
-            .eq("id", notification_id);
-
-        if (updateError) throw updateError;
-
+        console.log("Email sent successfully!");
         return new Response(
             JSON.stringify({ message: "Email sent successfully" }),
             {
@@ -98,12 +128,13 @@ serve(async (req: Request) => {
             },
         );
     } catch (error) {
-        console.error("Error sending notification email:", error);
+        console.error("Error in email notification process:", error);
         return new Response(
             JSON.stringify({
                 error: error instanceof Error
                     ? error.message
                     : "An unknown error occurred",
+                details: error instanceof Error ? error.stack : undefined,
             }),
             {
                 headers: { ...corsHeaders, "Content-Type": "application/json" },

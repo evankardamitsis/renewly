@@ -33,27 +33,20 @@ export function TestEmailNotification() {
 
             if (notificationError) throw notificationError
 
-            // Trigger email send
-            const response = await fetch("/functions/v1/send-notification-email", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
-                },
-                body: JSON.stringify({
-                    notification_id: notification.id
-                })
-            })
+            // Trigger email send using Edge Function
+            const { error: emailError } = await supabase.functions.invoke(
+                "send-notification-email",
+                {
+                    body: { notification_id: notification.id }
+                }
+            )
 
-            if (!response.ok) {
-                const error = await response.text()
-                throw new Error(error)
-            }
+            if (emailError) throw emailError
 
             toast.success("Test email sent! Check your inbox.")
         } catch (error) {
             console.error("Error sending test email:", error)
-            toast.error("Failed to send test email")
+            toast.error(error instanceof Error ? error.message : "Failed to send test email")
         } finally {
             setLoading(false)
         }

@@ -10,7 +10,6 @@ export function TestProjectNotifications() {
     const [loading, setLoading] = useState(false)
     const requestInProgress = useRef(false)
 
-
     const handleTestNotification = async () => {
         if (loading || requestInProgress.current) {
             toast.error("A test is already in progress")
@@ -58,7 +57,7 @@ export function TestProjectNotifications() {
             if (projectError) throw projectError
 
             // Create a notification for the test project
-            const { error: notificationError } = await supabase
+            const { data: notification, error: notificationError } = await supabase
                 .from("notifications")
                 .insert({
                     user_id: user.id,
@@ -68,8 +67,20 @@ export function TestProjectNotifications() {
                     read: false,
                     action_url: `/projects`
                 })
+                .select()
+                .single()
 
             if (notificationError) throw notificationError
+
+            // Trigger email notification
+            const { error: emailError } = await supabase.functions.invoke(
+                "send-notification-email",
+                {
+                    body: { notification_id: notification.id }
+                }
+            )
+
+            if (emailError) throw emailError
 
             // Wait a bit for the notification to be created
             await new Promise(resolve => setTimeout(resolve, 1000))

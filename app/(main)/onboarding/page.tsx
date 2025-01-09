@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { User } from "@supabase/supabase-js";
 import { Label } from "@/components/ui/label";
-import { updatePassword, createProfile, addTeamMember } from "../actions/auth";
+import { updatePassword, createProfile, addTeamMember } from "@/app/actions/auth";
 
 interface FormData {
   displayName: string;
@@ -22,61 +22,57 @@ interface InviteData {
   role: "admin" | "member";
 }
 
+const supabase = createClient();
+
 export default function OnboardingPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const [inviteData, setInviteData] = useState<InviteData | null>(null);
   const [formData, setFormData] = useState<FormData>({
     displayName: "",
     role: "",
-    password: "",
   });
+  const [user, setUser] = useState<User | null>(null);
+  const [inviteData, setInviteData] = useState<InviteData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const getInviteData = async () => {
+    const initializeOnboarding = async () => {
       try {
-        const supabase = createClient();
-
         // Check authentication status
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError || !session) {
-          console.error("No valid session:", sessionError);
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
           toast.error("Please log in to continue");
           router.push("/login");
           return;
         }
-
-        const { data: { user } } = await supabase.auth.getUser();
         setUser(user);
 
-        if (!user) {
-          console.error("No user found");
-          router.push("/login");
-          return;
-        }
-
-        // Check if user was invited
+        // Check invitation token
         const inviteToken = searchParams.get("invitation_token");
         if (!inviteToken) {
-          console.error("No invitation token found");
           toast.error("Invalid invitation link");
           return;
         }
 
-        // Get the invitation
+        // Get the invitation in a single query with proper error handling
         const { data: invitation, error: inviteError } = await supabase
           .from("team_invitations")
-          .select("*")
-          .eq("token", inviteToken)
-          .eq("email", user.email)
-          .eq("status", "pending")
-          .single();
+          .select("team_id, role")
+          .match({
+            token: inviteToken,
+            email: user.email,
+            status: "pending"
+          })
+          .maybeSingle();
 
-        if (inviteError || !invitation) {
-          console.error("Invalid invitation:", inviteError);
-          toast.error("Invalid invitation");
+        if (inviteError) {
+          console.error("Error fetching invitation:", inviteError);
+          toast.error("Failed to fetch invitation details");
+          return;
+        }
+
+        if (!invitation) {
+          toast.error("Invalid or expired invitation");
           return;
         }
 
@@ -85,13 +81,15 @@ export default function OnboardingPage() {
           role: invitation.role,
         });
       } catch (error) {
-        console.error("Error fetching invite data:", error);
-        toast.error("Something went wrong. Please try again.");
+        console.error("Onboarding initialization error:", error);
+        toast.error("Failed to initialize onboarding");
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    getInviteData();
-  }, [searchParams, router]);
+    initializeOnboarding();
+  }, [router, searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

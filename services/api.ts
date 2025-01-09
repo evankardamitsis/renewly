@@ -20,30 +20,55 @@ function handleError(error: unknown): never {
   throw new ApiError(message);
 }
 
+// Type for the raw project data from the database
+interface RawProjectWithTaskCount {
+  id: string;
+  name: string;
+  description: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  due_date: string | null;
+  slug: string;
+  team_id: string;
+  tasks: { count: number }[];
+}
+
 export const projectsApi = {
   list: async (teamId: string): Promise<Project[]> => {
     try {
       const { data, error } = await supabase
         .from("projects")
         .select(`
-          *,
+          id,
+          name,
+          description,
+          status,
+          created_at,
+          updated_at,
+          due_date,
+          slug,
+          team_id,
           tasks:tasks(count)
         `)
         .eq("team_id", teamId)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .abortSignal(new AbortController().signal);
 
       if (error) {
         console.error("Error fetching projects:", error);
         throw error;
       }
 
-      // Transform the count from tasks aggregation
-      const projects = (data || []).map((project) => ({
-        ...project,
-        tasks: project.tasks[0]?.count || 0,
-      })) as Project[];
+      // Transform the raw data into the expected Project type
+      const projects = (data || []).map((
+        rawProject: RawProjectWithTaskCount,
+      ) => ({
+        ...rawProject,
+        tasks: [], // Initialize with empty array as per Project type
+        taskCount: rawProject.tasks[0]?.count || 0, // Store count separately
+      }));
 
-      console.log("Fetched projects:", projects.length);
       return projects;
     } catch (error) {
       return handleError(error);

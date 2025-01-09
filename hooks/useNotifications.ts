@@ -1,51 +1,53 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Notification } from "@/types/database";
 import { useSettings } from "@/contexts/settings-context";
 import { playNotificationSound } from "@/lib/sounds";
 
+const supabase = createClient();
+const NOTIFICATION_LIMIT = 10;
+
 export function useNotifications() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
-    const { soundEnabled } = useSettings();
     const [userId, setUserId] = useState<string | null>(null);
+    const { soundEnabled } = useSettings();
+    const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-    useEffect(() => {
-        const supabase = createClient();
-
-        // Get current user
-        const getCurrentUser = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                setUserId(user.id);
-                return user.id;
-            }
-            return null;
-        };
-
-        // Fetch initial notifications
-        const fetchNotifications = async (uid: string) => {
-            const { data: notifications } = await supabase
+    // Fetch notifications with proper error handling
+    const fetchNotifications = useCallback(async (uid: string) => {
+        try {
+            const { data, error } = await supabase
                 .from("notifications")
                 .select("*")
                 .eq("user_id", uid)
                 .order("created_at", { ascending: false })
-                .limit(10);
+                .limit(NOTIFICATION_LIMIT);
 
-            if (notifications) {
-                setNotifications(notifications);
-                setUnreadCount(notifications.filter((n) => !n.read).length);
+            if (error) throw error;
+
+            if (data) {
+                setNotifications(data);
+                const unreadCount = data.filter((n) => !n.read).length;
+                setUnreadCount(unreadCount);
             }
-        };
+        } catch (error) {
+            console.error("Error fetching notifications:", error);
+        }
+    }, []);
 
-        // Initialize
-        getCurrentUser().then((uid) => {
-            if (uid) fetchNotifications(uid);
-        });
+    // Set up real-time subscription when userId is available
+    useEffect(() => {
+        if (!userId) return;
 
-        // Subscribe to notification changes
-        const channel = supabase
-            .channel("notifications")
+        // Cleanup previous subscription if exists
+        if (channelRef.current) {
+            channelRef.current.unsubscribe();
+        }
+
+        // Subscribe to notifications
+        channelRef.current = supabase
+            .channel(`notifications:${userId}`)
             .on(
                 "postgres_changes",
                 {
@@ -55,74 +57,134 @@ export function useNotifications() {
                     filter: `user_id=eq.${userId}`,
                 },
                 async (payload) => {
-                    if (payload.eventType === "INSERT") {
-                        const newNotification = payload.new as Notification;
-                        setNotifications((prev) => [newNotification, ...prev]);
-                        setUnreadCount((prev) => prev + 1);
-
-                        if (soundEnabled) {
-                            await playNotificationSound();
+                    try {
+                        if (payload.eventType === "INSERT") {
+                            const newNotification = payload.new as Notification;
+                            if (soundEnabled) {
+                                await playNotificationSound();
+                            }
+                            setNotifications(
+                                (prev) => [
+                                    newNotification,
+                                    ...prev.slice(0, NOTIFICATION_LIMIT - 1),
+                                ],
+                            );
+                            setUnreadCount((prev) => prev + 1);
+                        } else if (payload.eventType === "UPDATE") {
+                            const updatedNotification = payload
+                                .new as Notification;
+                            setNotifications((prev) =>
+                                prev.map((n) =>
+                                    n.id === updatedNotification.id
+                                        ? updatedNotification
+                                        : n
+                                )
+                            );
+                            // Update unread count if read status changed
+                            if (payload.old.read !== updatedNotification.read) {
+                                setUnreadCount((prev) =>
+                                    updatedNotification.read
+                                        ? prev - 1
+                                        : prev + 1
+                                );
+                            }
+                        } else if (payload.eventType === "DELETE") {
+                            const deletedNotification = payload
+                                .old as Notification;
+                            setNotifications((prev) =>
+                                prev.filter((n) =>
+                                    n.id !== deletedNotification.id
+                                )
+                            );
+                            if (!deletedNotification.read) {
+                                setUnreadCount((prev) => Math.max(0, prev - 1));
+                            }
                         }
-                    } else if (payload.eventType === "UPDATE") {
-                        const updatedNotification = payload.new as Notification;
-                        setNotifications((prev) =>
-                            prev.map((n) =>
-                                n.id === updatedNotification.id
-                                    ? updatedNotification
-                                    : n
-                            )
+                    } catch (error) {
+                        console.error(
+                            "Error handling notification change:",
+                            error,
                         );
-                        // Recalculate unread count
-                        setUnreadCount((prev) => {
-                            const wasUnread = prev > 0 && !payload.old.read;
-                            const isNowRead = updatedNotification.read;
-                            return wasUnread && isNowRead ? prev - 1 : prev;
-                        });
                     }
                 },
             )
             .subscribe();
 
         return () => {
-            supabase.removeChannel(channel);
+            if (channelRef.current) {
+                channelRef.current.unsubscribe();
+            }
         };
-    }, [soundEnabled, userId]);
+    }, [userId, soundEnabled]);
 
-    const markAsRead = async (id: string) => {
-        const supabase = createClient();
-        const { error } = await supabase
-            .from("notifications")
-            .update({ read: true })
-            .eq("id", id)
-            .eq("user_id", userId);
+    // Initialize user and fetch initial notifications
+    useEffect(() => {
+        const initializeNotifications = async () => {
+            try {
+                const { data: { user }, error } = await supabase.auth.getUser();
+                if (error) throw error;
 
-        if (!error) {
+                if (user) {
+                    setUserId(user.id);
+                    await fetchNotifications(user.id);
+                }
+            } catch (error) {
+                console.error("Error initializing notifications:", error);
+            }
+        };
+
+        initializeNotifications();
+
+        return () => {
+            if (channelRef.current) {
+                channelRef.current.unsubscribe();
+            }
+        };
+    }, [fetchNotifications]);
+
+    const markAsRead = useCallback(async (id: string) => {
+        try {
+            const { error } = await supabase
+                .from("notifications")
+                .update({ read: true })
+                .eq("id", id);
+
+            if (error) throw error;
+
             setNotifications((prev) =>
-                prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+                prev.map((n) => n.id === id ? { ...n, read: true } : n)
             );
-            setUnreadCount((prev) => prev - 1);
+            setUnreadCount((prev) => Math.max(0, prev - 1));
+        } catch (error) {
+            console.error("Error marking notification as read:", error);
+            throw error;
         }
-    };
+    }, []);
 
-    const markAllAsRead = async () => {
+    const markAllAsRead = useCallback(async () => {
         if (!userId) return;
 
-        const supabase = createClient();
-        const { error } = await supabase
-            .rpc("mark_all_notifications_read", {
-                p_user_id: userId,
-            });
+        try {
+            const { error } = await supabase
+                .rpc("mark_all_notifications_read", {
+                    p_user_id: userId,
+                });
 
-        if (!error) {
+            if (error) throw error;
+
             setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
             setUnreadCount(0);
+        } catch (error) {
+            console.error("Error marking all notifications as read:", error);
+            throw error;
         }
-    };
+    }, [userId]);
 
     return {
         notifications,
         unreadCount,
         markAsRead,
         markAllAsRead,
+        isInitialized: userId !== null,
     };
 }

@@ -2,29 +2,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Notification } from "@/types/database";
 
 const supabase = createClient();
-
-interface NotificationCache {
-    [key: string]: {
-        notifications: Notification[];
-        hasMore: boolean;
-        timestamp: number;
-        totalPages: number;
-    };
-}
-
-const CACHE_DURATION = 1000 * 60; // 1 minute
-const notificationCache: NotificationCache = {};
 const BATCH_SIZE = 50; // Maximum number of operations to batch together
-
-function getCacheKey(userId: string, page: number): string {
-    return `${userId}:${page}`;
-}
-
-function isCacheValid(cacheKey: string): boolean {
-    const cache = notificationCache[cacheKey];
-    if (!cache) return false;
-    return Date.now() - cache.timestamp < CACHE_DURATION;
-}
 
 export const notificationsApi = {
     async getUnreadNotifications(
@@ -48,24 +26,10 @@ export const notificationsApi = {
 
     async getAllNotifications(
         userId: string,
-        page = 1,
-        limit = 20,
-        signal?: AbortSignal
+        page: number,
+        limit: number,
+        offset?: number
     ): Promise<{ notifications: Notification[]; hasMore: boolean }> {
-        const cacheKey = getCacheKey(userId, page);
-        
-        // Check cache first
-        if (isCacheValid(cacheKey)) {
-            const cache = notificationCache[cacheKey];
-            return {
-                notifications: cache.notifications,
-                hasMore: cache.hasMore,
-            };
-        }
-
-        const from = (page - 1) * limit;
-        const to = from + limit - 1;
-
         const query = supabase
             .from("notifications")
             .select("*", {
@@ -73,36 +37,21 @@ export const notificationsApi = {
             })
             .eq("user_id", userId)
             .order("created_at", { ascending: false })
-            .range(from, to);
 
-        if (signal) query.abortSignal(signal);
+        // If offset is provided, use it; otherwise, calculate from page
+        const calculatedOffset = offset ?? (page - 1) * limit
+        query.range(calculatedOffset, calculatedOffset + limit - 1)
 
-        const { data, error, count } = await query;
+        const { data, error, count } = await query
 
-        if (error) throw error;
+        if (error) throw error
 
-        const hasMore = count ? count > to + 1 : false;
-        const totalPages = count ? Math.ceil(count / limit) : page;
-
-        // Update cache
-        notificationCache[cacheKey] = {
-            notifications: data as Notification[],
-            hasMore,
-            timestamp: Date.now(),
-            totalPages,
-        };
+        const hasMore = count ? count > calculatedOffset + limit : false
 
         return {
             notifications: data as Notification[],
             hasMore,
-        };
-    },
-
-    invalidateCache(userId: string) {
-        // Remove all cache entries for this user
-        Object.keys(notificationCache)
-            .filter(key => key.startsWith(`${userId}:`))
-            .forEach(key => delete notificationCache[key]);
+        }
     },
 
     async markAsRead(
@@ -135,9 +84,6 @@ export const notificationsApi = {
         const { error } = await query;
 
         if (error) throw error;
-        
-        // Invalidate cache after marking all as read
-        this.invalidateCache(userId);
     },
 
     subscribeToNotifications(
@@ -155,8 +101,6 @@ export const notificationsApi = {
                     filter: `user_id=eq.${userId}`,
                 },
                 (payload) => {
-                    // Invalidate cache when new notification arrives
-                    this.invalidateCache(userId);
                     onNotification(payload.new as Notification);
                 },
             )
@@ -179,9 +123,6 @@ export const notificationsApi = {
         const { error } = await query;
 
         if (error) throw error;
-
-        // Invalidate cache after deletion
-        this.invalidateCache(userId);
     },
 
     async deleteAllNotifications(
@@ -198,9 +139,6 @@ export const notificationsApi = {
         const { error } = await query;
 
         if (error) throw error;
-
-        // Invalidate cache after deletion
-        this.invalidateCache(userId);
     },
 
     async markMultipleAsRead(

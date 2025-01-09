@@ -1,19 +1,26 @@
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { useProjectStore } from "@/store/useProjectStore";
 import { toast } from "sonner";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Project } from "@/types/database";
+import { projectsApi } from "@/services/api";
+
+interface CreateProjectData {
+  name: string;
+  description?: string | null;
+  status?: "Planning" | "In Progress" | "Review" | "Completed";
+  due_date?: string;
+}
 
 export function useProjectActions() {
   const router = useRouter();
-  const { addProject } = useProjectStore();
-  const [isLoadingTeam, setIsLoadingTeam] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
+  const queryClient = useQueryClient();
+  const supabase = createClient();
 
-  const getCurrentTeamId = async () => {
-    try {
-      setIsLoadingTeam(true);
-      const supabase = createClient();
+  // Get current team ID
+  const { data: teamId, isLoading: isLoadingTeam } = useQuery({
+    queryKey: ["current-team"],
+    queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
@@ -28,51 +35,91 @@ export function useProjectActions() {
       }
 
       return profile.current_team_id;
-    } finally {
-      setIsLoadingTeam(false);
     }
-  };
+  });
 
-  const createProject = async ({
-    name,
-    description = null,
-    status = "Planning",
-    due_date,
-  }: {
-    name: string;
-    description?: string | null;
-    status?: "Planning" | "In Progress" | "Review" | "Completed";
-    due_date?: string;
-  }) => {
-    try {
-      setIsCreating(true);
-      const team_id = await getCurrentTeamId();
+  // Get projects for current team
+  const { data: projects, isLoading: isLoadingProjects } = useQuery({
+    queryKey: ["projects", teamId],
+    queryFn: () => {
+      if (!teamId) throw new Error("Team ID is required");
+      return projectsApi.list(teamId);
+    },
+    enabled: !!teamId,
+  });
 
-      const project = await addProject({
-        name,
-        description,
-        team_id,
-        status,
-        due_date,
+  // Create project mutation
+  const { mutate: createProject, isPending: isCreating } = useMutation({
+    mutationFn: async (data: CreateProjectData) => {
+      if (!teamId) throw new Error("Team ID is required");
+      
+      // Generate a URL-friendly slug from the project name
+      const slug = data.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      
+      const result = await projectsApi.create(teamId, {
+        ...data,
+        team_id: teamId,
+        slug,
       });
 
+      return result;
+    },
+    onSuccess: (project) => {
+      queryClient.invalidateQueries({ queryKey: ["projects", teamId] });
       toast.success("Project created successfully");
       router.push(`/projects/${project.slug}`);
-      return { project, error: null };
-    } catch (err) {
-      const message = err instanceof Error
-        ? err.message
-        : "Failed to create project";
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : "Failed to create project";
       toast.error(message);
-      return { project: null, error: message };
-    } finally {
-      setIsCreating(false);
-    }
-  };
+    },
+  });
+
+  // Update project mutation
+  const { mutate: updateProject, isPending: isUpdating } = useMutation({
+    mutationFn: async ({ id, updates }: { id: string, updates: Partial<Project> }) => {
+      return projectsApi.update(id, updates);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["projects", teamId] });
+      queryClient.invalidateQueries({ queryKey: ["projects", variables.id] });
+      toast.success("Project updated successfully");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to update project");
+    },
+  });
+
+  // Delete project mutation
+  const { mutate: deleteProject, isPending: isDeleting } = useMutation({
+    mutationFn: projectsApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects", teamId] });
+      toast.success("Project deleted successfully");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to delete project");
+    },
+  });
 
   return {
-    createProject,
+    // Data
+    teamId,
+    projects,
+    
+    // Loading states
     isLoadingTeam,
+    isLoadingProjects,
     isCreating,
+    isUpdating,
+    isDeleting,
+    
+    // Actions
+    createProject: (data: CreateProjectData) => createProject(data),
+    updateProject,
+    deleteProject,
   };
 }

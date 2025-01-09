@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -33,13 +33,8 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Sidebar } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/@shared/theme-toggle";
-import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { toast } from "sonner";
-import { User as SupabaseUser } from "@supabase/supabase-js";
 import { teamsApi } from "@/services/api";
 import { useAsync } from "@/hooks/useAsync";
 import {
@@ -52,185 +47,20 @@ import {
 import { Label } from "@/components/ui/label";
 import { getRoleDisplay, hasRoleAccess } from "@/utils/roles";
 import { NotificationsMenu } from './notifications-menu'
-
-interface Profile {
-  display_name: string | null;
-  email: string | null;
-  current_team_id: string | null;
-  role: "admin" | "member" | null;
-  is_super_admin?: boolean;
-}
-
-interface Team {
-  image_url: string | null;
-}
+import { useAuth } from "@/contexts/auth-context";
+import { useProfile } from "@/hooks/useProfile";
 
 export function Header() {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState<SupabaseUser | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [team, setTeam] = useState<Team | null>(null);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
   const { loading: isInviting, execute } = useAsync();
-  const router = useRouter();
+  const { user, isLoading: isAuthLoading, signOut } = useAuth();
+  const { profile, isLoading: isProfileLoading } = useProfile();
 
-  useEffect(() => {
-    const supabase = createClient();
-
-    async function getProfileAndTeam() {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
-
-        setUser(user);
-
-        // First get the profile to get the current_team_id
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("display_name, email, current_team_id")
-          .eq("id", user.id)
-          .single();
-
-        if (!profileData) return;
-
-        // Then get the team member role using both user ID and team ID
-        const { data: teamMemberData } = await supabase
-          .from("team_members")
-          .select("role, is_super_admin")
-          .eq("user_id", user.id)
-          .eq("team_id", profileData.current_team_id)
-          .single();
-
-        const transformedProfile = {
-          display_name: profileData.display_name,
-          email: profileData.email,
-          current_team_id: profileData.current_team_id,
-          role: teamMemberData?.role || null,
-          is_super_admin: teamMemberData?.is_super_admin || false,
-        };
-
-        setProfile(transformedProfile);
-
-        if (profileData.current_team_id) {
-          const { data: teamData } = await supabase
-            .from("teams")
-            .select("image_url")
-            .eq("id", profileData.current_team_id)
-            .single();
-
-          if (teamData?.image_url) {
-            const fileNameMatch = teamData.image_url.match(
-              /([a-f0-9-]+-\d+\.png)$/i
-            );
-            const fileName = fileNameMatch ? fileNameMatch[1] : null;
-
-            if (fileName) {
-              const {
-                data: { publicUrl },
-              } = supabase.storage.from("team-images").getPublicUrl(fileName);
-
-              setTeam({ image_url: publicUrl });
-              return;
-            }
-          }
-          setTeam(teamData);
-        }
-      } catch (error) {
-        console.error("Error fetching profile:", error);
-      }
-    }
-
-    getProfileAndTeam();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        // First get the profile to get the current_team_id
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("display_name, email, current_team_id")
-          .eq("id", session.user.id)
-          .single();
-
-        if (!profileData) return;
-
-        // Then get the team member role using both user ID and team ID
-        const { data: teamMemberData } = await supabase
-          .from("team_members")
-          .select("role, is_super_admin")
-          .eq("user_id", session.user.id)
-          .eq("team_id", profileData.current_team_id)
-          .single();
-
-        const transformedProfile = {
-          display_name: profileData.display_name,
-          email: profileData.email,
-          current_team_id: profileData.current_team_id,
-          role: teamMemberData?.role || null,
-          is_super_admin: teamMemberData?.is_super_admin || false,
-        };
-
-        setProfile(transformedProfile);
-
-        if (profileData.current_team_id) {
-          const { data: teamData } = await supabase
-            .from("teams")
-            .select("image_url")
-            .eq("id", profileData.current_team_id)
-            .single();
-
-          if (teamData?.image_url) {
-            const fileNameMatch = teamData.image_url.match(
-              /([a-f0-9-]+-\d+\.png)$/i
-            );
-            const fileName = fileNameMatch ? fileNameMatch[1] : null;
-
-            if (fileName) {
-              const {
-                data: { publicUrl },
-              } = supabase.storage.from("team-images").getPublicUrl(fileName);
-
-              setTeam({ image_url: publicUrl });
-              return;
-            }
-          }
-          setTeam(teamData);
-        }
-      } else {
-        setProfile(null);
-        setTeam(null);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const handleSignOut = async () => {
-    try {
-      setLoading(true);
-      const supabase = createClient();
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-
-      router.refresh();
-      router.push("/login");
-    } catch (error) {
-      console.error("Sign out error:", error);
-      toast.error("Error signing out");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const isLoading = isAuthLoading || isProfileLoading;
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
@@ -249,7 +79,7 @@ export function Header() {
       setInviteRole("member");
       setIsInviteModalOpen(false);
     } catch (error) {
-      // Error is handled by useAsync
+      console.error("Error inviting member:", error);
     }
   };
 
@@ -392,7 +222,7 @@ export function Header() {
                     >
                       <Avatar>
                         <AvatarImage
-                          src={team?.image_url || "/placeholder.svg"}
+                          src={profile?.team?.image_url || "/placeholder.svg"}
                           onError={(e) =>
                             (e.currentTarget.src = "/placeholder.svg")
                           }
@@ -455,12 +285,12 @@ export function Header() {
                         </DropdownMenuItem>
                       )}
                     <DropdownMenuItem
-                      onClick={handleSignOut}
+                      onClick={signOut}
                       className="text-destructive cursor-pointer"
-                      disabled={loading}
+                      disabled={isLoading}
                     >
                       <LogOut className="mr-2 size-4" />
-                      <span>{loading ? "Logging out..." : "Log out"}</span>
+                      <span>{isLoading ? "Signing out..." : "Sign out"}</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -481,9 +311,7 @@ export function Header() {
                 </SheetTrigger>
                 <SheetContent side="right" className="w-[300px] sm:w-[400px] p-0">
                   <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-                  <Sidebar>
-                    <MainNav />
-                  </Sidebar>
+                  <MainNav />
                 </SheetContent>
               </Sheet>
             </>

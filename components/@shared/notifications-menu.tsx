@@ -5,15 +5,31 @@ import {
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useNotifications } from "@/hooks/useNotifications"
-import { useRouter } from "next/navigation"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { NotificationItem } from "@/components/notifications/notification-item"
+import { useNotificationsQuery } from "@/hooks/useNotificationsQuery"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
 import { Notification } from "@/types/database"
 
 export function NotificationsMenu() {
     const router = useRouter()
-    const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications()
+    const { user } = useAuth()
+
+    const {
+        notifications,
+        unreadCount,
+        isLoading,
+        markAsRead,
+        markAllAsRead,
+    } = useNotificationsQuery({
+        userId: user?.id || "",
+        limit: 5,
+        isMenu: true,
+    })
+
+    // Filter to show only unread notifications in the menu
+    const unreadNotifications = notifications.filter(n => !n.read)
 
     const handleNotificationClick = async (notification: Notification) => {
         if (!notification.read) {
@@ -31,20 +47,26 @@ export function NotificationsMenu() {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative">
-                    <Bell className="h-5 w-5" />
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative"
+                    disabled={isLoading || !user}
+                >
+                    <Bell className="size-5" />
                     {unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
+                        <span className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
                             {unreadCount}
                         </span>
                     )}
+                    <span className="sr-only">View notifications</span>
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
+            <DropdownMenuContent align="end" className="w-[380px]">
                 <div className="flex items-center justify-between px-4 py-2 border-b">
                     <h3 className="font-semibold">Notifications</h3>
                     <div className="flex items-center gap-2">
-                        {notifications.length > 0 && (
+                        {unreadCount > 0 && (
                             <Button
                                 variant="ghost"
                                 size="sm"
@@ -65,12 +87,12 @@ export function NotificationsMenu() {
                     </div>
                 </div>
                 <ScrollArea className="h-[300px]">
-                    {notifications.length === 0 ? (
+                    {unreadNotifications.length === 0 ? (
                         <div className="px-4 py-8 text-center text-muted-foreground">
-                            No notifications
+                            No unread notifications
                         </div>
                     ) : (
-                        notifications.map((notification) => (
+                        unreadNotifications.map((notification) => (
                             <NotificationItem
                                 key={notification.id}
                                 notification={notification}

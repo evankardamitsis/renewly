@@ -4,6 +4,8 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/@shared/theme-provider";
 import { Toaster } from "sonner";
 import { SettingsProvider } from "@/contexts/settings-context";
+import { AuthProvider } from "@/contexts/auth-context";
+import { QueryProvider } from "@/providers/query-provider";
 
 // Configure Inter font with Latin subset
 const inter = Inter({ subsets: ["latin"] });
@@ -38,18 +40,22 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} antialiased bg-background text-foreground`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <SettingsProvider>
-            <div className="relative flex min-h-screen flex-col">
-              {children}
-            </div>
-          </SettingsProvider>
-        </ThemeProvider>
+        <QueryProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <AuthProvider>
+              <SettingsProvider>
+                <div className="relative flex min-h-screen flex-col">
+                  {children}
+                </div>
+              </SettingsProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </QueryProvider>
         <Toaster />
       </body>
     </html>

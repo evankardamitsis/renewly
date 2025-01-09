@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Bell } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import {
@@ -17,27 +17,56 @@ import { RealtimeChannel } from '@supabase/supabase-js'
 export function NotificationsMenu() {
     const [notifications, setNotifications] = useState<Notification[]>([])
     const [unreadCount, setUnreadCount] = useState(0)
+    const [open, setOpen] = useState(false)
+    const [isNavigating, setIsNavigating] = useState(false)
     const router = useRouter()
+
+    // Close dropdown after navigation
+    useEffect(() => {
+        if (isNavigating) {
+            setOpen(false)
+            setIsNavigating(false)
+        }
+    }, [isNavigating])
+
+    const handleViewAll = useCallback(() => {
+        setIsNavigating(true)
+        router.push('/notifications')
+    }, [router])
+
+    const handleNotificationClick = useCallback(async (notification: Notification) => {
+        try {
+            if (!notification.read) {
+                await notificationsApi.markAsRead(notification.id)
+                setNotifications(prev =>
+                    prev.map(n =>
+                        n.id === notification.id ? { ...n, read: true } : n
+                    )
+                )
+                setUnreadCount(prev => Math.max(0, prev - 1))
+            }
+
+            if (notification.action_url) {
+                setIsNavigating(true)
+                router.push(notification.action_url)
+            }
+        } catch (error) {
+            console.error('Failed to mark notification as read:', error)
+        }
+    }, [router])
 
     useEffect(() => {
         let channel: RealtimeChannel | null = null;
 
         const loadNotifications = async () => {
             try {
-                console.log("Loading notifications...");
                 const supabase = createClient()
                 const { data: { user } } = await supabase.auth.getUser()
-                if (!user) {
-                    console.log("No user found");
-                    return;
-                }
+                if (!user) return;
 
-                console.log("Fetching notifications for user:", user.id);
-                const allNotifications = await notificationsApi.getAllNotifications(user.id);
-                const unreadNotifications = allNotifications.filter(n => !n.read);
-                console.log("Fetched notifications:", allNotifications);
-                console.log("Unread count:", unreadNotifications.length);
-                setNotifications(allNotifications);
+                // Only fetch unread notifications for the menu
+                const unreadNotifications = await notificationsApi.getUnreadNotifications(user.id);
+                setNotifications(unreadNotifications);
                 setUnreadCount(unreadNotifications.length);
 
                 // Subscribe to new notifications
@@ -52,27 +81,23 @@ export function NotificationsMenu() {
                             filter: `user_id=eq.${user.id}`,
                         },
                         (payload) => {
-                            console.log("Received notification change:", payload);
                             if (payload.eventType === 'INSERT') {
                                 const newNotification = payload.new as Notification;
-                                setNotifications(prev => {
-                                    const updated = [newNotification, ...prev];
-                                    console.log("Updated notifications:", updated);
-                                    return updated;
-                                });
                                 if (!newNotification.read) {
+                                    setNotifications(prev => [newNotification, ...prev]);
                                     setUnreadCount(prev => prev + 1);
+                                    toast.info(newNotification.title, {
+                                        description: newNotification.message,
+                                    });
                                 }
-                                toast.info(newNotification.title, {
-                                    description: newNotification.message,
-                                });
                             } else if (payload.eventType === 'UPDATE') {
                                 const updatedNotification = payload.new as Notification;
                                 setNotifications(prev => {
-                                    const updated = prev.map(n =>
-                                        n.id === updatedNotification.id ? updatedNotification : n
+                                    // Remove notification if it's now read
+                                    const updated = prev.filter(n =>
+                                        n.id !== updatedNotification.id || !updatedNotification.read
                                     );
-                                    const newCount = updated.filter(n => !n.read).length;
+                                    const newCount = updated.length;
                                     setUnreadCount(newCount);
                                     return updated;
                                 });
@@ -80,9 +105,7 @@ export function NotificationsMenu() {
                         }
                     );
 
-                console.log("Subscribing to channel...");
                 await channel.subscribe();
-                console.log("Successfully subscribed to notifications channel");
             } catch (error) {
                 console.error('Failed to load notifications:', error)
             }
@@ -92,53 +115,39 @@ export function NotificationsMenu() {
 
         return () => {
             if (channel) {
-                console.log("Cleaning up subscription...");
                 const supabase = createClient()
                 supabase.removeChannel(channel)
             }
         }
     }, [])
 
-    const handleNotificationClick = async (notification: Notification) => {
-        try {
-            if (!notification.read) {
-                await notificationsApi.markAsRead(notification.id)
-                setNotifications(prev =>
-                    prev.map(n =>
-                        n.id === notification.id ? { ...n, read: true } : n
-                    )
-                )
-                setUnreadCount(prev => Math.max(0, prev - 1))
-            }
-
-            if (notification.action_url) {
-                router.push(notification.action_url)
-            }
-        } catch (error) {
-            console.error('Failed to mark notification as read:', error)
-        }
-    }
-
     const handleMarkAllAsRead = async () => {
         try {
             const supabase = createClient();
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+            if (!user) {
+                toast.error("You must be logged in");
+                return;
+            }
 
             await notificationsApi.markAllAsRead(user.id);
-
-            // Update local state
-            setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+            setNotifications(prev =>
+                prev.map(notification => ({
+                    ...notification,
+                    read: true
+                }))
+            );
             setUnreadCount(0);
-            toast.success("Marked all notifications as read");
+            setOpen(false);
+            toast.success("All notifications marked as read");
         } catch (error) {
             console.error("Failed to mark all as read:", error);
-            toast.error("Failed to mark all as read");
+            toast.error(error instanceof Error ? error.message : "Failed to mark all notifications as read");
         }
     };
 
     return (
-        <DropdownMenu>
+        <DropdownMenu open={open} onOpenChange={setOpen}>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative">
                     <Bell className="h-5 w-5" />
@@ -150,40 +159,48 @@ export function NotificationsMenu() {
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80">
+                <div className="flex items-center justify-between p-2 border-b">
+                    <span className="text-sm font-medium">Notifications</span>
+                    <div className="flex items-center gap-2">
+                        {unreadCount > 0 && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs"
+                                onClick={handleMarkAllAsRead}
+                            >
+                                Mark all as read
+                            </Button>
+                        )}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs"
+                            onClick={handleViewAll}
+                        >
+                            View all
+                        </Button>
+                    </div>
+                </div>
                 {notifications.length === 0 ? (
                     <div className="p-4 text-center text-muted-foreground">
-                        No new notifications
+                        No unread notifications
                     </div>
                 ) : (
-                    <>
-                        <div className="flex items-center justify-between p-2 border-b">
-                            <span className="text-sm font-medium">Notifications</span>
-                            {unreadCount > 0 && (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-xs"
-                                    onClick={handleMarkAllAsRead}
-                                >
-                                    Mark all as read
-                                </Button>
-                            )}
-                        </div>
-                        {notifications.map(notification => (
-                            <DropdownMenuItem
-                                key={notification.id}
-                                className={`p-4 cursor-pointer ${!notification.read ? 'bg-muted/50' : ''}`}
-                                onClick={() => handleNotificationClick(notification)}
-                            >
-                                <div>
-                                    <div className="font-medium">{notification.title}</div>
-                                    <div className="text-sm text-muted-foreground">
-                                        {notification.message}
-                                    </div>
+                    notifications.map(notification => (
+                        <DropdownMenuItem
+                            key={notification.id}
+                            className="p-4 cursor-pointer bg-muted/50"
+                            onClick={() => handleNotificationClick(notification)}
+                        >
+                            <div>
+                                <div className="font-medium">{notification.title}</div>
+                                <div className="text-sm text-muted-foreground">
+                                    {notification.message}
                                 </div>
-                            </DropdownMenuItem>
-                        ))}
-                    </>
+                            </div>
+                        </DropdownMenuItem>
+                    ))
                 )}
             </DropdownMenuContent>
         </DropdownMenu>

@@ -1,11 +1,15 @@
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { useState } from "react";
 
 export function TestNotifications() {
+    const [isCreating, setIsCreating] = useState(false);
+
     const createTestTask = async () => {
+        if (isCreating) return;
         try {
-            console.log("Creating test task...");
+            setIsCreating(true);
             const supabase = createClient();
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
@@ -29,10 +33,11 @@ export function TestNotifications() {
             const dueDate = new Date();
             dueDate.setDate(dueDate.getDate() + 2);
 
+            // First create the task
             const { data: task, error: taskError } = await supabase
                 .from("tasks")
                 .insert({
-                    title: "Test Task for Notifications",
+                    title: `Test Task ${new Date().toLocaleTimeString()}`, // Add timestamp to make it unique
                     description: "This is a test task to verify notifications",
                     status: "todo",
                     priority: "medium",
@@ -45,78 +50,74 @@ export function TestNotifications() {
 
             if (taskError) {
                 console.error("Error creating task:", taskError);
-                return;
+                throw taskError;
             }
 
-            console.log("Created test task:", task);
+            toast.success("Test task created");
+
+            // Wait for the task to be properly created
+            await new Promise(resolve => setTimeout(resolve, 2000));
 
             // Trigger the due date check
-            console.log("Triggering due date check...");
-            const { data, error } = await supabase.functions.invoke("check-due-dates");
-            console.log("Response:", { data, error });
+            const { error } = await supabase.functions.invoke("check-due-dates", {
+                body: JSON.stringify({ taskId: task.id }) // Pass the specific task ID
+            });
 
+            if (error) throw error;
+            toast.success("Notification check triggered");
         } catch (error) {
             console.error("Error:", error);
+            toast.error("Failed to create test task");
+        } finally {
+            setIsCreating(false);
         }
     };
 
     const triggerDueDateCheck = async () => {
+        if (isCreating) return;
         try {
-            console.log("Triggering due date check...");
+            setIsCreating(true);
             const supabase = createClient();
-            const { data, error } = await supabase.functions.invoke("check-due-dates", {
-                body: JSON.stringify({}),
-            });
+            const { error } = await supabase.functions.invoke("check-due-dates");
 
-            console.log("Response:", { data, error });
-
-            if (error) {
-                console.error("Error:", error);
-                throw error;
-            }
-
+            if (error) throw error;
             toast.success("Due date check triggered successfully");
         } catch (error) {
             console.error("Error triggering due date check:", error);
-            toast.error(error instanceof Error ? error.message : "Failed to trigger due date check");
+            toast.error("Failed to trigger due date check");
+        } finally {
+            setIsCreating(false);
         }
     };
 
     const createTestNotification = async () => {
+        if (isCreating) return;
         try {
-            console.log("Creating test notification...");
+            setIsCreating(true);
             const supabase = createClient();
             const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-            if (userError) {
-                console.error("User error:", userError);
-                throw userError;
-            }
+            if (userError) throw userError;
+            if (!user) throw new Error("No user found");
 
-            if (!user) {
-                console.error("No user found");
-                throw new Error("No user found");
-            }
+            const { error: notificationError } = await supabase
+                .from("notifications")
+                .insert({
+                    user_id: user.id,
+                    type: "TEST_NOTIFICATION",
+                    title: "Test Notification",
+                    message: "This is a test notification to check the UI",
+                    action_url: "/notifications",
+                    read: false
+                });
 
-            console.log("Creating notification for user:", user.id);
-            const { error: notificationError } = await supabase.from("notifications").insert({
-                user_id: user.id,
-                type: "TEST_NOTIFICATION",
-                title: "Test Notification",
-                message: "This is a test notification to check the UI",
-                action_url: "/notifications",
-                read: false
-            });
-
-            if (notificationError) {
-                console.error("Notification error:", notificationError);
-                throw notificationError;
-            }
-
+            if (notificationError) throw notificationError;
             toast.success("Test notification created");
         } catch (error) {
             console.error("Error creating test notification:", error);
-            toast.error(error instanceof Error ? error.message : "Failed to create test notification");
+            toast.error("Failed to create test notification");
+        } finally {
+            setIsCreating(false);
         }
     };
 
@@ -131,8 +132,11 @@ export function TestNotifications() {
                             Create a test task due in 2 days and trigger notifications
                         </p>
                     </div>
-                    <Button onClick={createTestTask}>
-                        Create Task & Check
+                    <Button
+                        onClick={createTestTask}
+                        disabled={isCreating}
+                    >
+                        {isCreating ? 'Creating...' : 'Create Task & Check'}
                     </Button>
                 </div>
 
@@ -143,8 +147,12 @@ export function TestNotifications() {
                             Trigger the due date check function to create notifications for tasks due in the next 3 days
                         </p>
                     </div>
-                    <Button onClick={triggerDueDateCheck} variant="outline">
-                        Trigger Check
+                    <Button
+                        onClick={triggerDueDateCheck}
+                        variant="outline"
+                        disabled={isCreating}
+                    >
+                        {isCreating ? 'Checking...' : 'Trigger Check'}
                     </Button>
                 </div>
 
@@ -155,8 +163,12 @@ export function TestNotifications() {
                             Create a test notification to check the UI
                         </p>
                     </div>
-                    <Button onClick={createTestNotification} variant="outline">
-                        Create Test
+                    <Button
+                        onClick={createTestNotification}
+                        variant="outline"
+                        disabled={isCreating}
+                    >
+                        {isCreating ? 'Creating...' : 'Create Test'}
                     </Button>
                 </div>
             </div>

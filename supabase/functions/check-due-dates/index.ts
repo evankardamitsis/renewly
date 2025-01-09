@@ -24,11 +24,13 @@ serve(async (req) => {
     }
 
     try {
-        console.log("Starting due date check...");
         const supabase = createClient(
             Deno.env.get("SUPABASE_URL") ?? "",
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
         );
+
+        // Parse request body for specific task ID
+        const { taskId } = await req.json().catch(() => ({}));
 
         // Get tasks due in the next 2 days
         const now = new Date();
@@ -36,13 +38,8 @@ serve(async (req) => {
             now.getTime() + 2 * 24 * 60 * 60 * 1000,
         );
 
-        console.log("Fetching tasks due in the next 2 days...");
-        console.log("Date range:", {
-            now: now.toISOString(),
-            twoDaysFromNow: twoDaysFromNow.toISOString(),
-        });
-
-        const { data: tasks, error: tasksError } = await supabase
+        // Build the query based on whether we're checking a specific task
+        let query = supabase
             .from("tasks")
             .select(`
                 id,
@@ -56,19 +53,27 @@ serve(async (req) => {
             `)
             .gte("due_date", now.toISOString())
             .lte("due_date", twoDaysFromNow.toISOString())
-            .not("assigned_to", "is", null)
-            .returns<Task[]>();
+            .not("assigned_to", "is", null);
+
+        // If taskId is provided, only check that specific task
+        if (taskId) {
+            query = query.eq("id", taskId);
+        }
+
+        const { data: tasks, error: tasksError } = await query.returns<
+            Task[]
+        >();
 
         if (tasksError) {
-            console.error("Error fetching tasks:", tasksError);
             throw tasksError;
         }
 
         if (!tasks || tasks.length === 0) {
-            console.log("No tasks found due in the next 2 days");
             return new Response(
                 JSON.stringify({
-                    message: "No tasks found due in the next 2 days",
+                    message: taskId
+                        ? "Specified task not found or not due soon"
+                        : "No tasks found due in the next 2 days",
                 }),
                 {
                     headers: {
@@ -80,16 +85,9 @@ serve(async (req) => {
             );
         }
 
-        console.log(
-            `Found ${tasks.length} tasks due in the next 2 days:`,
-            tasks,
-        );
-
         // Create notifications for each task
         const notifications = [];
         for (const task of tasks) {
-            console.log("Processing task:", task);
-
             try {
                 const projectName = task.project?.name || "Unknown Project";
 
@@ -106,21 +104,10 @@ serve(async (req) => {
                         .eq("read", false)
                         .gte("created_at", oneDayAgo.toISOString());
 
-                if (checkError) {
-                    console.error(
-                        "Error checking existing notifications:",
-                        checkError,
-                    );
-                    continue;
-                }
+                if (checkError) throw checkError;
 
                 // Skip if notification already exists within the last day
-                if (existingNotifications && existingNotifications.length > 0) {
-                    console.log(
-                        `Recent notification exists for task ${task.id}, skipping`,
-                    );
-                    continue;
-                }
+                if (existingNotifications?.length > 0) continue;
 
                 // Create notification if none exists
                 const { data: notification, error: notificationError } =
@@ -143,34 +130,18 @@ serve(async (req) => {
                         .select()
                         .single();
 
-                if (notificationError) {
-                    console.error(
-                        "Error creating notification for task:",
-                        task.id,
-                        notificationError,
-                    );
-                } else {
-                    console.log("Created notification:", notification);
-                    notifications.push(notification);
+                if (notificationError) throw notificationError;
 
-                    // Broadcast the new notification
-                    await supabase.channel("notifications").send({
-                        type: "broadcast",
-                        event: "new_notification",
-                        payload: notification,
-                    });
-                }
+                notifications.push(notification);
             } catch (error) {
-                console.error("Error processing task:", task.id, error);
+                console.error(`Error processing task ${task.id}:`, error);
             }
         }
 
-        console.log(`Created ${notifications.length} notifications`);
-
         return new Response(
             JSON.stringify({
-                message:
-                    `Due date checks completed successfully. Created ${notifications.length} notifications.`,
+                message: `Created ${notifications.length} notification(s)`,
+                notifications,
             }),
             {
                 headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -179,13 +150,11 @@ serve(async (req) => {
         );
     } catch (error) {
         console.error("Error in due date check:", error);
-        const errorMessage = error instanceof Error
-            ? error.message
-            : "An unknown error occurred";
         return new Response(
             JSON.stringify({
-                error: errorMessage,
-                details: error instanceof Error ? error.stack : undefined,
+                error: error instanceof Error
+                    ? error.message
+                    : "An unknown error occurred",
             }),
             {
                 headers: { ...corsHeaders, "Content-Type": "application/json" },

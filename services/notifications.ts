@@ -39,52 +39,53 @@ export const notificationsApi = {
 
     async markAllAsRead(userId: string): Promise<void> {
         const supabase = createClient();
-        console.log("Marking all notifications as read for user:", userId);
 
-        // First, get all unread notifications to verify the update
-        const { data: unreadBefore } = await supabase
-            .from("notifications")
-            .select("id")
-            .eq("user_id", userId)
-            .eq("read", false);
-
-        console.log(
-            `Found ${
-                unreadBefore?.length || 0
-            } unread notifications before update`,
-        );
-
-        // Update all unread notifications
-        const { data: updated, error } = await supabase
-            .from("notifications")
-            .update({ read: true })
-            .eq("user_id", userId)
-            .eq("read", false)
-            .select();
+        const { error } = await supabase
+            .rpc("mark_all_notifications_read", {
+                p_user_id: userId,
+            });
 
         if (error) {
-            console.error("Error marking all as read:", error);
-            throw error;
-        }
-
-        // Verify the update
-        const { data: unreadAfter } = await supabase
-            .from("notifications")
-            .select("id")
-            .eq("user_id", userId)
-            .eq("read", false);
-
-        console.log(`Updated ${updated?.length || 0} notifications`);
-        console.log(
-            `Remaining unread notifications: ${unreadAfter?.length || 0}`,
-        );
-
-        if (unreadAfter && unreadAfter.length > 0) {
-            console.error(
-                "Some notifications were not marked as read:",
-                unreadAfter,
+            console.error("Error marking all notifications as read:", error);
+            throw new Error(
+                `Failed to mark notifications as read: ${error.message}`,
             );
-            throw new Error("Failed to mark all notifications as read");
+        }
+    },
+
+    async deleteNotification(notificationId: string): Promise<void> {
+        const supabase = createClient();
+
+        // First get the user to ensure we're deleting our own notification
+        const { data: { user }, error: userError } = await supabase.auth
+            .getUser();
+        if (userError) throw userError;
+        if (!user) throw new Error("Not authenticated");
+
+        const { error } = await supabase
+            .rpc("delete_notification", {
+                p_notification_id: notificationId,
+                p_user_id: user.id,
+            });
+
+        if (error) {
+            console.error("Error deleting notification:", error);
+            throw new Error(`Failed to delete notification: ${error.message}`);
+        }
+    },
+
+    async deleteAllNotifications(userId: string): Promise<void> {
+        const supabase = createClient();
+        const { error } = await supabase
+            .rpc("delete_all_notifications", {
+                p_user_id: userId,
+            });
+
+        if (error) {
+            console.error("Error deleting all notifications:", error);
+            throw new Error(
+                `Failed to delete all notifications: ${error.message}`,
+            );
         }
     },
 };

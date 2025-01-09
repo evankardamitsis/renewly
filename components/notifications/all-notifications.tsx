@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { formatDistanceToNow } from "date-fns"
+import { NotificationItem } from "@/components/notifications/notification-item"
 
 interface AllNotificationsProps {
     userId: string
@@ -176,33 +177,21 @@ export function AllNotifications({ userId }: AllNotificationsProps) {
             ) : (
                 <div className="min-h-[400px] space-y-2">
                     {notifications.map(notification => (
-                        <div
-                            key={notification.id}
-                            className={`p-4 rounded-lg border cursor-pointer transition-colors group ${!notification.read ? 'bg-muted/50' : ''
-                                }`}
-                            onClick={() => handleNotificationClick(notification)}
-                        >
-                            <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1">
-                                    <div className="font-medium">{notification.title}</div>
-                                    <div className="text-sm text-muted-foreground">
-                                        {notification.message}
-                                    </div>
-                                </div>
-                                <div className="flex flex-col items-end gap-2">
-                                    <div className="text-xs text-muted-foreground">
-                                        {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                                        onClick={(e) => handleDeleteNotification(e, notification)}
-                                    >
-                                        Remove
-                                    </Button>
-                                </div>
-                            </div>
+                        <div key={notification.id} className="group relative">
+                            <NotificationItem
+                                notification={notification}
+                                onClick={handleNotificationClick}
+                                className="rounded-lg border bg-card"
+                                dateFormatter={(date) => formatDistanceToNow(date, { addSuffix: true })}
+                            />
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={(e) => handleDeleteNotification(e, notification)}
+                            >
+                                Remove
+                            </Button>
                         </div>
                     ))}
                 </div>

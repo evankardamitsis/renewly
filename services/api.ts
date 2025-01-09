@@ -32,13 +32,19 @@ export const projectsApi = {
         .eq("team_id", teamId)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching projects:", error);
+        throw error;
+      }
 
       // Transform the count from tasks aggregation
-      return (data || []).map((project) => ({
+      const projects = (data || []).map((project) => ({
         ...project,
         tasks: project.tasks[0]?.count || 0,
       })) as Project[];
+
+      console.log("Fetched projects:", projects.length);
+      return projects;
     } catch (error) {
       return handleError(error);
     }
@@ -98,6 +104,7 @@ export const projectsApi = {
         .from("projects")
         .delete()
         .eq("id", id);
+
       if (error) throw error;
     } catch (error) {
       handleError(error);

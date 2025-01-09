@@ -50,7 +50,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { getRoleColor, getRoleDisplay, hasRoleAccess } from "@/utils/roles";
+import { getRoleDisplay, hasRoleAccess } from "@/utils/roles";
 import { NotificationsMenu } from './notifications-menu'
 
 interface Profile {
@@ -415,10 +415,11 @@ export function Header() {
                         {profile?.role && (
                           <p className={cn(
                             "text-xs font-medium",
-                            getRoleColor({
-                              role: profile.role,
-                              is_super_admin: profile.is_super_admin || false
-                            })
+                            {
+                              'text-purple-500': profile.is_super_admin,
+                              'text-blue-500': !profile.is_super_admin && profile.role === 'admin',
+                              'text-green-500': !profile.is_super_admin && profile.role === 'member'
+                            }
                           )}>
                             {getRoleDisplay({
                               role: profile.role,

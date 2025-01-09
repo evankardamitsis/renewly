@@ -67,9 +67,9 @@ export function getRoleDisplay(role: TeamRole): string {
 
 // Helper to get role color
 export function getRoleColor(role: TeamRole): string {
-    if (role.is_super_admin) return "text-purple-500";
-    if (role.role === "admin") return "text-blue-500";
-    return "text-green-500";
+    if (role.is_super_admin) return "purple-500";
+    if (role.role === "admin") return "blue-500";
+    return "green-500";
 }
 
 // Check if a user has a specific capability

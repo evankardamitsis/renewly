@@ -79,4 +79,22 @@ export const notificationsApi = {
             )
             .subscribe();
     },
+
+    async deleteNotification(notificationId: string): Promise<void> {
+        const { error } = await supabase
+            .from("notifications")
+            .delete()
+            .eq("id", notificationId);
+
+        if (error) throw error;
+    },
+
+    async deleteAllNotifications(userId: string): Promise<void> {
+        const { error } = await supabase
+            .from("notifications")
+            .delete()
+            .eq("user_id", userId);
+
+        if (error) throw error;
+    },
 };

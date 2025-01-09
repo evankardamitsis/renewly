@@ -18,6 +18,8 @@ interface AllNotificationsProps {
 export function AllNotifications({ userId }: AllNotificationsProps) {
     const [notifications, setNotifications] = useState<Notification[]>([])
     const [loading, setLoading] = useState(true)
+    const [hasMore, setHasMore] = useState(false)
+    const [page, setPage] = useState(1)
     const router = useRouter()
 
     useEffect(() => {
@@ -26,8 +28,9 @@ export function AllNotifications({ userId }: AllNotificationsProps) {
         const loadNotifications = async () => {
             try {
                 setLoading(true)
-                const allNotifications = await notificationsApi.getAllNotifications(userId)
-                setNotifications(allNotifications)
+                const result = await notificationsApi.getAllNotifications(userId, page)
+                setNotifications(prev => page === 1 ? result.notifications : [...prev, ...result.notifications])
+                setHasMore(result.hasMore)
 
                 // Subscribe to notification changes
                 const supabase = createClient()
@@ -76,7 +79,11 @@ export function AllNotifications({ userId }: AllNotificationsProps) {
                 supabase.removeChannel(channel)
             }
         }
-    }, [userId])
+    }, [userId, page])
+
+    const handleLoadMore = () => {
+        setPage(prev => prev + 1)
+    }
 
     const handleNotificationClick = async (notification: Notification) => {
         try {
@@ -115,29 +122,30 @@ export function AllNotifications({ userId }: AllNotificationsProps) {
     }
 
     const handleDeleteNotification = async (e: React.MouseEvent, notification: Notification) => {
-        e.stopPropagation(); // Prevent triggering the notification click
+        e.stopPropagation() // Prevent triggering the notification click
         try {
-            await notificationsApi.deleteNotification(notification.id);
-            setNotifications(prev => prev.filter(n => n.id !== notification.id));
-            toast.success('Notification removed');
+            await notificationsApi.deleteNotification(notification.id)
+            setNotifications(prev => prev.filter(n => n.id !== notification.id))
+            toast.success('Notification removed')
         } catch (error) {
-            console.error('Failed to delete notification:', error);
-            toast.error('Failed to delete notification');
+            console.error('Failed to delete notification:', error)
+            toast.error('Failed to delete notification')
         }
-    };
+    }
 
     const handleDeleteAllNotifications = async () => {
         try {
-            await notificationsApi.deleteAllNotifications(userId);
-            setNotifications([]);
-            toast.success('All notifications removed');
+            await notificationsApi.deleteAllNotifications(userId)
+            setNotifications([])
+            setHasMore(false)
+            toast.success('All notifications removed')
         } catch (error) {
-            console.error('Failed to delete all notifications:', error);
-            toast.error('Failed to delete all notifications');
+            console.error('Failed to delete all notifications:', error)
+            toast.error('Failed to delete all notifications')
         }
-    };
+    }
 
-    if (loading) {
+    if (loading && page === 1) {
         return (
             <div className="min-h-[400px] w-full flex items-center justify-center p-8 border rounded-lg">
                 <div className="animate-pulse text-muted-foreground">Loading notifications...</div>
@@ -194,6 +202,19 @@ export function AllNotifications({ userId }: AllNotificationsProps) {
                             </Button>
                         </div>
                     ))}
+
+                    {hasMore && (
+                        <div className="flex justify-center pt-4">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleLoadMore}
+                                disabled={loading}
+                            >
+                                {loading ? 'Loading...' : 'Load more'}
+                            </Button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

@@ -1,13 +1,18 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TestEmailNotification } from "@/components/notifications/test-email-notification";
 import { TestTaskDueNotification } from "@/components/notifications/test-task-due-notification";
 import { TestOverdueNotifications } from "@/components/notifications/test-overdue-notifications";
 import { TestTeamNotifications } from "@/components/notifications/test-team-notifications";
 import { TestProjectNotifications } from "@/components/notifications/test-project-notifications";
+import { playNotificationSound } from "@/lib/sounds";
+import { useSettings } from "@/contexts/settings-context";
 
 export default function TestPage() {
+    const { soundEnabled } = useSettings();
+
     return (
         <div className="container py-6 space-y-6">
             <div className="flex items-center justify-between">
@@ -15,6 +20,29 @@ export default function TestPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Sound Test Card */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Test Sound</CardTitle>
+                        <CardDescription>
+                            Test the notification sound effect
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Button
+                            onClick={() => playNotificationSound()}
+                            disabled={!soundEnabled}
+                        >
+                            Play Notification Sound
+                        </Button>
+                        {!soundEnabled && (
+                            <p className="mt-2 text-sm text-muted-foreground">
+                                Enable sound effects in settings to test the notification sound
+                            </p>
+                        )}
+                    </CardContent>
+                </Card>
+
                 {/* Email Test Card */}
                 <Card>
                     <CardHeader>

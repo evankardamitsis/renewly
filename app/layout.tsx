@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/@shared/theme-provider";
 import { Toaster } from "sonner";
+import { SettingsProvider } from "@/contexts/settings-context";
 
 // Configure Inter font with Latin subset
 const inter = Inter({ subsets: ["latin"] });
@@ -43,9 +44,11 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <div className="relative flex min-h-screen flex-col">
-            {children}
-          </div>
+          <SettingsProvider>
+            <div className="relative flex min-h-screen flex-col">
+              {children}
+            </div>
+          </SettingsProvider>
         </ThemeProvider>
         <Toaster />
       </body>

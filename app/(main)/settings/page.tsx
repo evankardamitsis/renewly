@@ -10,99 +10,76 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
+
+interface NotificationPreference {
+  id: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+}
 
 export default function SettingsPage() {
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [theme, setTheme] = useState("system");
-  const [language, setLanguage] = useState("english");
+  const [preferences, setPreferences] = useState<NotificationPreference[]>([
+    {
+      id: "email",
+      label: "Email Notifications",
+      description: "Receive email notifications for important updates",
+      enabled: true,
+    },
+    {
+      id: "push",
+      label: "Push Notifications",
+      description: "Get push notifications in your browser",
+      enabled: true,
+    },
+    {
+      id: "mentions",
+      label: "Mentions",
+      description: "Notify when someone mentions you",
+      enabled: true,
+    },
+  ]);
+
+  const handleToggle = (id: string) => {
+    setPreferences((prev) =>
+      prev.map((pref) =>
+        pref.id === id ? { ...pref, enabled: !pref.enabled } : pref
+      )
+    );
+  };
 
   return (
-    <div className="container mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">Settings</h1>
-      <div className="grid gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Notifications</CardTitle>
-            <CardDescription>
-              Manage your notification preferences
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="email-notifications">Email Notifications</Label>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Notifications</CardTitle>
+          <CardDescription>
+            Configure how you receive notifications
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {preferences.map((preference) => (
+            <div
+              key={preference.id}
+              className="flex items-center justify-between"
+            >
+              <div className="space-y-0.5">
+                <Label htmlFor={preference.id}>
+                  {preference.label}
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  {preference.description}
+                </p>
+              </div>
               <Switch
-                id="email-notifications"
-                checked={emailNotifications}
-                onCheckedChange={setEmailNotifications}
+                id={preference.id}
+                checked={preference.enabled}
+                onCheckedChange={() => handleToggle(preference.id)}
               />
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Appearance</CardTitle>
-            <CardDescription>
-              Customize the look of your dashboard
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="theme">Theme</Label>
-              <Select value={theme} onValueChange={setTheme}>
-                <SelectTrigger id="theme">
-                  <SelectValue placeholder="Select a theme" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="light">Light</SelectItem>
-                  <SelectItem value="dark">Dark</SelectItem>
-                  <SelectItem value="system">System</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Language</CardTitle>
-            <CardDescription>Choose your preferred language</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="language">Language</Label>
-              <Select value={language} onValueChange={setLanguage}>
-                <SelectTrigger id="language">
-                  <SelectValue placeholder="Select a language" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="english">English</SelectItem>
-                  <SelectItem value="spanish">Spanish</SelectItem>
-                  <SelectItem value="french">French</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Account</CardTitle>
-            <CardDescription>Manage your account settings</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <Button variant="destructive">Delete Account</Button>
-          </CardContent>
-        </Card>
-      </div>
+          ))}
+        </CardContent>
+      </Card>
     </div>
   );
 }

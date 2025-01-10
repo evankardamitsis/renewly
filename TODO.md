@@ -4,27 +4,31 @@
 
 ### Backend
 
-- [X] Integrate with Supabase
-- [X] Implement Authentication
+- [x] Integrate with Supabase
+- [x] Implement Authentication
 
 ### Auth
 
-- [X] Register and Verify with email
+- [x] Register and Verify with email
 - [] Add more login providers (e.g. Google)
-- [X] Password reset functionality
-- [X] Clean up Auth file structure
-- [X] Use server actions
+- [x] Password reset functionality
+- [x] Clean up Auth file structure
+- [x] Use server actions
 
 ### Task Management
 
-- [X] Add correct fields for New Task
-- [X] Create recurring tasks
-- [X] Implement task reordering within the same column
+- [x] Add correct fields for New Task
+- [x] Create recurring tasks
+- [x] Implement task reordering within the same column
 - [ ] Add task filtering by assignee
 - [ ] Add task search by description
-- [X] Implement task deletion functionality
+- [x] Implement task deletion functionality
 - [ ] Add task duplication feature
 - [ ] Add batch actions for multiple tasks
+
+### Sounds & Notifications
+
+- [] Create different sounds for specific notifications (create, overdue, etc)
 
 ### Team Management
 
@@ -35,11 +39,11 @@
 
 ### UI/UX Improvements
 
-- [X] Add loading states for async operations
-- [X] Implement error boundaries
-- [X] Add toast notifications for actions
+- [x] Add loading states for async operations
+- [x] Implement error boundaries
+- [x] Add toast notifications for actions
 - [ ] Improve mobile responsiveness
-- [X] Add dark/light theme toggle animations
+- [x] Add dark/light theme toggle animations
 
 ## Known Bugs
 

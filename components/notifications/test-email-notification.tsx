@@ -4,9 +4,12 @@ import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { useState } from "react"
+import { playNotificationSound } from "@/lib/sounds"
+import { useSettings } from "@/contexts/settings-context"
 
 export function TestEmailNotification() {
     const [loading, setLoading] = useState(false)
+    const { soundEnabled } = useSettings()
 
     const handleTestEmail = async () => {
         try {
@@ -42,6 +45,10 @@ export function TestEmailNotification() {
             )
 
             if (emailError) throw emailError
+
+            if (soundEnabled) {
+                await playNotificationSound()
+            }
 
             toast.success("Test email sent! Check your inbox.")
         } catch (error) {

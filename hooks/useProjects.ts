@@ -4,16 +4,16 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase/client"
 import { queryKeys } from "@/lib/react-query"
 import { useProfile } from "./useProfile"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
+import { Project } from "@/types/project"
 import React from "react"
 
-interface Project {
-  id: string
+interface CreateProjectData {
   name: string
-  description: string | null
-  status: "Planning" | "In Progress" | "Completed"
-  tasks_count: number
-  slug: string
-  due_date: string | null
+  description?: string | null
+  status?: "Planning" | "In Progress" | "Review" | "Completed"
+  due_date?: string
 }
 
 const supabase = createClient()
@@ -33,11 +33,12 @@ async function getProjects(teamId: string) {
 
   return data.map(project => ({
     ...project,
-    tasks_count: project.tasks[0].count
+    taskCount: project.tasks[0].count
   })) as Project[]
 }
 
 export function useProjects() {
+  const router = useRouter()
   const { profile } = useProfile()
   const queryClient = useQueryClient()
   const teamId = profile?.current_team_id
@@ -70,25 +71,97 @@ export function useProjects() {
   })
 
   const createProject = useMutation({
-    mutationFn: async (data: Partial<Project>) => {
+    mutationFn: async (data: CreateProjectData) => {
       if (!teamId) throw new Error("Team ID is required")
+      
+      // Generate a URL-friendly slug from the project name
+      const slug = data.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+      
+      const { data: project, error } = await supabase
+        .from("projects")
+        .insert([{ 
+          ...data, 
+          team_id: teamId,
+          slug,
+          status: data.status || "Planning"
+        }])
+        .select()
+        .single()
+
+      if (error) throw error
+      return project as Project
+    },
+    onSuccess: (project) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all(teamId) })
+      toast.success("Project created successfully")
+      router.push(`/projects/${project.slug}`)
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : "Failed to create project"
+      toast.error(message)
+    }
+  })
+
+  const updateProject = useMutation({
+    mutationFn: async ({ id, updates }: { id: string, updates: Partial<Project> }) => {
+      const { data, error } = await supabase
+        .from("projects")
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data as Project
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all(teamId) })
+      queryClient.invalidateQueries({ queryKey: ["projects", variables.id] })
+      toast.success("Project updated successfully")
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to update project")
+    }
+  })
+
+  const deleteProject = useMutation({
+    mutationFn: async (id: string) => {
       const { error } = await supabase
         .from("projects")
-        .insert([{ ...data, team_id: teamId }])
+        .delete()
+        .eq("id", id)
+
       if (error) throw error
     },
     onSuccess: () => {
-      if (teamId) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.projects.all(teamId) })
-      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all(teamId) })
+      toast.success("Project deleted successfully")
     },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to delete project")
+    }
   })
 
   return {
+    // Data
     projects: projectsQuery.data ?? [],
+    
+    // Loading states
     isLoading: projectsQuery.isLoading,
     error: projectsQuery.error,
-    createProject: createProject.mutate,
     isCreating: createProject.isPending,
+    isUpdating: updateProject.isPending,
+    isDeleting: deleteProject.isPending,
+    
+    // Actions
+    createProject: createProject.mutate,
+    updateProject: updateProject.mutate,
+    deleteProject: deleteProject.mutate,
   }
 } 

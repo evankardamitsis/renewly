@@ -6,6 +6,7 @@ export interface Project {
   status: "Planning" | "In Progress" | "Review" | "Completed";
   due_date: string | null;
   tasks: string[];
+  tasks_count: number;
   team_id: string;
   created_at: string;
   updated_at: string;

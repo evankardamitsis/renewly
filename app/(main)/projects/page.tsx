@@ -1,14 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import { useProjectStore } from "@/store/useProjectStore";
-import { createClient } from "@/lib/supabase/client";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Plus, MoreVertical, Trash } from "lucide-react";
 import { ProjectModal } from "@/components/projects/project-modal";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -17,81 +13,33 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
+import { useProjects } from "@/hooks/useProjects";
 
 export default function ProjectsPage() {
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+
   const {
-    projects,
+    projects = [],
     isLoading,
-    error,
-    fetchProjects,
-    addProject,
+    createProject,
     deleteProject,
-    setError,
-  } = useProjectStore();
-
-  useEffect(() => {
-    async function loadProjects() {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("current_team_id")
-        .eq("id", user.id)
-        .single();
-
-      if (profile?.current_team_id) {
-        await fetchProjects(profile.current_team_id);
-      }
-    }
-
-    loadProjects();
-  }, [fetchProjects]);
+  } = useProjects();
 
   const handleProjectCreate = async (newProject: {
     name: string;
     description: string | null;
   }) => {
     try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error("Not authenticated");
-      }
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("current_team_id")
-        .eq("id", user.id)
-        .single();
-
-      if (!profile?.current_team_id) {
-        throw new Error("No team selected");
-      }
-
-      const createdProject = await addProject({
+      await createProject({
         name: newProject.name,
         description: newProject.description,
-        team_id: profile.current_team_id,
       });
-
       setIsModalOpen(false);
-      toast.success("Project created successfully");
-      router.push(`/projects/${createdProject.slug}`);
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-        toast.error("Failed to create project");
-      }
+      toast.error("Failed to create project");
     }
   };
 
@@ -106,29 +54,12 @@ export default function ProjectsPage() {
 
     try {
       await deleteProject(projectToDelete);
-      toast.success("Project deleted successfully");
       setIsDeleteModalOpen(false);
       setProjectToDelete(null);
     } catch (err) {
       toast.error("Failed to delete project");
     }
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-destructive">Error: {error}</div>
-      </div>
-    );
-  }
 
   return (
     <div className="container mx-auto py-6">
@@ -174,7 +105,7 @@ export default function ProjectsPage() {
             </p>
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">
-                {project.tasks} tasks
+                {project.taskCount || 0} tasks
               </span>
               <span className="text-sm text-muted-foreground">
                 Due{" "}
@@ -185,7 +116,7 @@ export default function ProjectsPage() {
             </div>
           </div>
         ))}
-        {projects.length === 0 && (
+        {projects.length === 0 && !isLoading && (
           <div className="col-span-full text-center text-muted-foreground py-12">
             No projects found. Create your first project to get started!
           </div>

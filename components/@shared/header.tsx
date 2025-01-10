@@ -98,8 +98,6 @@ export function Header() {
         </div>
 
         <div className="ml-auto flex items-center gap-4">
-          <ThemeToggle />
-
           {user && (
             <>
               {/* Team Section */}
@@ -232,6 +230,13 @@ export function Header() {
                     <DropdownMenuItem onClick={() => signOut()}>
                       <LogOut className="mr-2 size-4" />
                       Log out
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem>
+                      <div className="flex w-full items-center">
+                        <span className="flex-1">Theme</span>
+                        <ThemeToggle />
+                      </div>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

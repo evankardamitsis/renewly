@@ -1,168 +1,272 @@
+"use client"
+
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query"
-import { notificationsApi } from "@/services/notifications"
-import { toast } from "sonner"
-import { Notification } from "@/types/database"
+import { createClient } from "@/lib/supabase/client"
+import { queryKeys } from "@/lib/react-query"
+import { useAuth } from "@/contexts/auth-context"
+import { useSettings } from "@/contexts/settings-context"
+import { playNotificationSound } from "@/lib/sounds"
+import { NotificationType } from "@/types/database"
+import React from "react"
 
-interface UseNotificationsQueryProps {
-  userId: string
-  limit?: number
-  isMenu?: boolean // To differentiate between menu and full page
+interface NotificationMetadata {
+  projectId?: string
+  taskId?: string
+  teamId?: string
+  userId?: string
+  action?: string
+  entityType?: string
+  entityId?: string
 }
 
-interface NotificationsResponse {
-  notifications: Notification[]
-  hasMore: boolean
+interface Notification {
+  id: string
+  user_id: string
+  title: string
+  message: string
+  read: boolean
+  created_at: string
+  type: NotificationType
+  metadata: NotificationMetadata
+  action_url?: string
+  task_id?: string
+  project_id?: string
 }
 
-interface InfiniteNotificationsData {
-  pages: NotificationsResponse[]
-  pageParams: number[]
+const supabase = createClient()
+
+async function getNotifications(userId: string, { limit = 5, offset = 0 }) {
+  const { data, error, count } = await supabase
+    .from("notifications")
+    .select("*", { count: "exact" })
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1)
+
+  if (error) throw error
+  return { 
+    notifications: data as Notification[],
+    count: count ?? 0
+  }
 }
 
-export function useNotificationsQuery({ 
-  userId, 
-  limit = 20,
-  isMenu = false 
-}: UseNotificationsQueryProps) {
+async function getUnreadCount(userId: string) {
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("read", false)
+
+  if (error) throw error
+  return count ?? 0
+}
+
+async function markAsRead(notificationId: string) {
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("id", notificationId)
+
+  if (error) throw error
+}
+
+async function markAllAsRead(userId: string) {
+  const { error } = await supabase
+    .rpc("mark_all_notifications_read", {
+      p_user_id: userId,
+    })
+
+  if (error) throw error
+}
+
+async function deleteNotification(notificationId: string) {
+  const { error } = await supabase
+    .from("notifications")
+    .delete()
+    .eq("id", notificationId)
+
+  if (error) throw error
+}
+
+async function deleteAllNotifications(userId: string) {
+  const { error } = await supabase
+    .from("notifications")
+    .delete()
+    .eq("user_id", userId)
+
+  if (error) throw error
+}
+
+export function useNotificationsQuery(limit: number = 5, isInfinite: boolean = false) {
+  const { user } = useAuth()
   const queryClient = useQueryClient()
+  const { soundEnabled } = useSettings()
 
-  // Menu query
-  const menuQuery = useQuery<NotificationsResponse>({
-    queryKey: ["notifications", userId, "menu"],
-    queryFn: () => notificationsApi.getAllNotifications(userId, 1, limit),
-    staleTime: 1000 * 60, // 1 minute
-    enabled: isMenu,
+  // Prefetch notifications
+  React.useEffect(() => {
+    if (user?.id) {
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.notifications.all(user.id),
+        queryFn: () => getNotifications(user.id, { limit }),
+        staleTime: 5 * 60 * 1000, // 5 minutes
+      })
+
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.notifications.unread(user.id),
+        queryFn: () => getUnreadCount(user.id),
+        staleTime: 5 * 60 * 1000,
+      })
+    }
+  }, [user?.id, queryClient, limit])
+
+  // Regular query for menu
+  const notificationsQuery = useQuery({
+    queryKey: queryKeys.notifications.all(user?.id ?? ""),
+    queryFn: () => {
+      if (!user?.id) throw new Error("User ID is required")
+      return getNotifications(user.id, { limit })
+    },
+    enabled: !!user?.id && !isInfinite,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    retry: 2,
+    retryDelay: 1000,
+    placeholderData: (oldData) => oldData,
+    select: (data) => data.notifications,
   })
 
   // Infinite query for full page
-  const infiniteQuery = useInfiniteQuery<NotificationsResponse, Error, InfiniteNotificationsData, string[], number>({
-    queryKey: ["notifications", userId, "infinite"],
-    queryFn: async ({ pageParam }) => {
-      const offset = ((pageParam as number) - 1) * limit
-      return notificationsApi.getAllNotifications(userId, pageParam as number, limit, offset)
+  const infiniteQuery = useInfiniteQuery({
+    queryKey: queryKeys.notifications.infinite(user?.id ?? ""),
+    queryFn: async ({ pageParam = 0 }) => {
+      if (!user?.id) throw new Error("User ID is required")
+      return getNotifications(user.id, { limit, offset: pageParam * limit })
     },
+    enabled: !!user?.id && isInfinite,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
     getNextPageParam: (lastPage, allPages) => {
-      if (!lastPage.hasMore) return undefined
-      return allPages.length + 1
+      const totalFetched = allPages.length * limit
+      return totalFetched < lastPage.count ? allPages.length : undefined
     },
-    initialPageParam: 1,
-    staleTime: 1000 * 60, // 1 minute
-    enabled: !isMenu,
+    initialPageParam: 0,
   })
 
-  // Query for unread notifications count
-  const { data: unreadNotifications } = useQuery<Notification[]>({
-    queryKey: ["notifications", userId, "unread"],
-    queryFn: () => notificationsApi.getUnreadNotifications(userId),
-    staleTime: 1000 * 60, // 1 minute
+  const unreadCountQuery = useQuery({
+    queryKey: queryKeys.notifications.unread(user?.id ?? ""),
+    queryFn: () => {
+      if (!user?.id) throw new Error("User ID is required")
+      return getUnreadCount(user.id)
+    },
+    enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    retry: 2,
+    retryDelay: 1000,
+    placeholderData: (oldData) => oldData,
   })
 
-  // Mutation to mark a notification as read
-  const { mutate: markAsRead } = useMutation({
-    mutationFn: async (notificationId: string) => {
-      await notificationsApi.markAsRead(notificationId)
+  // Mutations
+  const markAsReadMutation = useMutation({
+    mutationFn: (notificationId: string) => markAsRead(notificationId),
+    onSuccess: () => {
+      if (user?.id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all(user.id) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.infinite(user.id) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unread(user.id) })
+      }
+    }
+  })
+
+  const markAllAsReadMutation = useMutation({
+    mutationFn: () => {
+      if (!user?.id) throw new Error("User ID is required")
+      return markAllAsRead(user.id)
     },
     onSuccess: () => {
-      // Invalidate both notifications queries
-      queryClient.invalidateQueries({ queryKey: ["notifications", userId] })
-    },
-    onError: (error) => {
-      toast.error("Failed to mark notification as read")
-      console.error("Error marking notification as read:", error)
-    },
+      if (user?.id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all(user.id) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.infinite(user.id) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unread(user.id) })
+      }
+    }
   })
 
-  // Mutation to mark all notifications as read
-  const { mutate: markAllAsRead } = useMutation({
-    mutationFn: () => notificationsApi.markAllAsRead(userId),
+  const deleteNotificationMutation = useMutation({
+    mutationFn: (notificationId: string) => deleteNotification(notificationId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", userId] })
-      toast.success("All notifications marked as read")
-    },
-    onError: (error) => {
-      toast.error("Failed to mark all notifications as read")
-      console.error("Error marking all notifications as read:", error)
-    },
+      if (user?.id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all(user.id) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.infinite(user.id) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unread(user.id) })
+      }
+    }
   })
 
-  // Mutation to delete a notification
-  const { mutate: deleteNotification } = useMutation({
-    mutationFn: (notificationId: string) => 
-      notificationsApi.deleteNotification(notificationId, userId),
+  const deleteAllNotificationsMutation = useMutation({
+    mutationFn: () => {
+      if (!user?.id) throw new Error("User ID is required")
+      return deleteAllNotifications(user.id)
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", userId] })
-      toast.success("Notification removed")
-    },
-    onError: (error) => {
-      toast.error("Failed to delete notification")
-      console.error("Error deleting notification:", error)
-    },
+      if (user?.id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all(user.id) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.infinite(user.id) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unread(user.id) })
+      }
+    }
   })
 
-  // Mutation to delete all notifications
-  const { mutate: deleteAllNotifications } = useMutation({
-    mutationFn: () => notificationsApi.deleteAllNotifications(userId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", userId] })
-      toast.success("All notifications removed")
-    },
-    onError: (error) => {
-      toast.error("Failed to delete all notifications")
-      console.error("Error deleting all notifications:", error)
-    },
-  })
+  // Subscribe to realtime notifications
+  React.useEffect(() => {
+    if (!user?.id) return
 
-  // Mutation to delete multiple notifications
-  const { mutate: deleteMultipleNotifications } = useMutation({
-    mutationFn: (notificationIds: string[]) => 
-      notificationsApi.deleteMultiple(notificationIds, userId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", userId] })
-      toast.success("Selected notifications removed")
-    },
-    onError: (error) => {
-      toast.error("Failed to delete selected notifications")
-      console.error("Error deleting multiple notifications:", error)
-    },
-  })
+    const channel = supabase
+      .channel('notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        async (payload) => {
+          // Play sound for new notifications if enabled
+          if (payload.eventType === 'INSERT' && soundEnabled) {
+            await playNotificationSound()
+          }
+          // Invalidate queries to refresh data
+          queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all(user.id) })
+          queryClient.invalidateQueries({ queryKey: queryKeys.notifications.infinite(user.id) })
+          queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unread(user.id) })
+        }
+      )
+      .subscribe()
 
-  // Mutation to mark multiple notifications as read
-  const { mutate: markMultipleAsRead } = useMutation({
-    mutationFn: (notificationIds: string[]) => 
-      notificationsApi.markMultipleAsRead(notificationIds),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", userId] })
-      toast.success("Selected notifications marked as read")
-    },
-    onError: (error) => {
-      toast.error("Failed to mark selected notifications as read")
-      console.error("Error marking multiple notifications as read:", error)
-    },
-  })
-
-  // Process and return data based on query type
-  const notifications = isMenu 
-    ? menuQuery.data?.notifications ?? []
-    : infiniteQuery.data?.pages.flatMap((page: NotificationsResponse) => page.notifications) ?? []
-
-  const hasMore = isMenu
-    ? menuQuery.data?.hasMore ?? false
-    : infiniteQuery.hasNextPage ?? false
+    return () => {
+      channel.unsubscribe()
+    }
+  }, [user?.id, queryClient, soundEnabled])
 
   return {
-    notifications,
-    hasMore,
-    isLoading: isMenu ? menuQuery.isLoading : infiniteQuery.isLoading,
-    error: isMenu ? menuQuery.error : infiniteQuery.error,
-    refetch: isMenu ? menuQuery.refetch : infiniteQuery.refetch,
-    fetchNextPage: !isMenu ? infiniteQuery.fetchNextPage : undefined,
-    isFetchingNextPage: !isMenu ? infiniteQuery.isFetchingNextPage : undefined,
-    unreadCount: unreadNotifications?.length ?? 0,
-    markAsRead,
-    markAllAsRead,
-    deleteNotification,
-    deleteAllNotifications,
-    deleteMultipleNotifications,
-    markMultipleAsRead,
+    notifications: isInfinite 
+      ? infiniteQuery.data?.pages.flatMap(page => page.notifications) ?? []
+      : notificationsQuery.data ?? [],
+    isLoading: isInfinite ? infiniteQuery.isLoading : notificationsQuery.isLoading,
+    error: isInfinite ? infiniteQuery.error : notificationsQuery.error,
+    hasNextPage: isInfinite ? infiniteQuery.hasNextPage : false,
+    fetchNextPage: isInfinite ? infiniteQuery.fetchNextPage : undefined,
+    isFetchingNextPage: isInfinite ? infiniteQuery.isFetchingNextPage : false,
+    unreadCount: unreadCountQuery.data ?? 0,
+    isLoadingUnreadCount: unreadCountQuery.isLoading,
+    markAsRead: markAsReadMutation.mutate,
+    markAllAsRead: markAllAsReadMutation.mutate,
+    deleteNotification: deleteNotificationMutation.mutate,
+    deleteAllNotifications: deleteAllNotificationsMutation.mutate,
   }
 } 

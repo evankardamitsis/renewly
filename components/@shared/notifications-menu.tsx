@@ -22,11 +22,7 @@ export function NotificationsMenu() {
         isLoading,
         markAsRead,
         markAllAsRead,
-    } = useNotificationsQuery({
-        userId: user?.id || "",
-        limit: 5,
-        isMenu: true,
-    })
+    } = useNotificationsQuery(5) // Limit to 5 notifications in menu
 
     // Filter to show only unread notifications in the menu
     const unreadNotifications = notifications.filter(n => !n.read)
@@ -38,6 +34,10 @@ export function NotificationsMenu() {
         if (notification.action_url) {
             router.push(notification.action_url)
         }
+    }
+
+    const handleMarkAllAsRead = async () => {
+        await markAllAsRead()
     }
 
     const handleViewAll = () => {
@@ -70,7 +70,7 @@ export function NotificationsMenu() {
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => markAllAsRead()}
+                                onClick={handleMarkAllAsRead}
                                 className="text-xs"
                             >
                                 Mark all as read
@@ -96,7 +96,7 @@ export function NotificationsMenu() {
                             <NotificationItem
                                 key={notification.id}
                                 notification={notification}
-                                onClick={handleNotificationClick}
+                                onClick={() => handleNotificationClick(notification)}
                             />
                         ))
                     )}

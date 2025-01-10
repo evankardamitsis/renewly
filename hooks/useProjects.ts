@@ -1,104 +1,94 @@
+"use client"
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { projectsApi } from "@/services/api"
-import { Project } from "@/types/database"
-import { toast } from "sonner"
+import { createClient } from "@/lib/supabase/client"
+import { queryKeys } from "@/lib/react-query"
+import { useProfile } from "./useProfile"
+import React from "react"
 
-interface CreateProjectData {
-  name: string
-  description?: string | null
-  status?: string
-  due_date?: string | null
-  slug?: string
-  teamId: string
-}
-
-interface UpdateProjectData {
+interface Project {
   id: string
-  updates: Partial<Project>
+  name: string
+  description: string | null
+  status: "Planning" | "In Progress" | "Completed"
+  tasks_count: number
+  slug: string
+  due_date: string | null
 }
 
-// Get all projects for a team
-export function useProjects(teamId: string | undefined) {
-  return useQuery({
-    queryKey: ["projects", teamId],
+const supabase = createClient()
+
+async function getProjects(teamId: string) {
+  const { data, error } = await supabase
+    .from("projects")
+    .select(`
+      *,
+      tasks:tasks(count)
+    `)
+    .eq("team_id", teamId)
+    .in("status", ["Planning", "In Progress"])
+    .order("created_at", { ascending: false })
+
+  if (error) throw error
+
+  return data.map(project => ({
+    ...project,
+    tasks_count: project.tasks[0].count
+  })) as Project[]
+}
+
+export function useProjects() {
+  const { profile } = useProfile()
+  const queryClient = useQueryClient()
+  const teamId = profile?.current_team_id
+
+  // Prefetch projects data
+  React.useEffect(() => {
+    if (teamId) {
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.projects.all(teamId),
+        queryFn: () => getProjects(teamId),
+        staleTime: 30 * 60 * 1000,
+      })
+    }
+  }, [teamId, queryClient])
+
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.projects.all(teamId ?? ""),
     queryFn: () => {
       if (!teamId) throw new Error("Team ID is required")
-      return projectsApi.list(teamId)
+      return getProjects(teamId)
     },
     enabled: !!teamId,
+    staleTime: 30 * 60 * 1000, // 30 minutes
+    gcTime: 60 * 60 * 1000, // 1 hour
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    retry: 2,
+    retryDelay: 1000,
+    placeholderData: (oldData) => oldData,
   })
-}
-
-// Get a single project by ID
-export function useProject(projectId: string | undefined) {
-  return useQuery({
-    queryKey: ["projects", projectId],
-    queryFn: async () => {
-      if (!projectId) throw new Error("Project ID is required")
-      const { data, error } = await projectsApi.get(projectId)
-      if (error) throw error
-      return data
-    },
-    enabled: !!projectId,
-  })
-}
-
-// Mutations for projects (create, update, delete)
-export function useProjectMutations() {
-  const queryClient = useQueryClient()
 
   const createProject = useMutation({
-    mutationFn: async (data: CreateProjectData) => {
-      const result = await projectsApi.create(data.teamId, {
-        name: data.name,
-        description: data.description,
-        status: data.status,
-        due_date: data.due_date,
-        slug: data.slug,
-      })
-      return result
+    mutationFn: async (data: Partial<Project>) => {
+      if (!teamId) throw new Error("Team ID is required")
+      const { error } = await supabase
+        .from("projects")
+        .insert([{ ...data, team_id: teamId }])
+      if (error) throw error
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["projects", variables.teamId] })
-      toast.success("Project created successfully")
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to create project")
-    },
-  })
-
-  const updateProject = useMutation({
-    mutationFn: async ({ id, updates }: UpdateProjectData) => {
-      const result = await projectsApi.update(id, updates)
-      return result
-    },
-    onSuccess: (_, variables) => {
-      // Invalidate both the list and the individual project
-      queryClient.invalidateQueries({ queryKey: ["projects"] })
-      queryClient.invalidateQueries({ queryKey: ["projects", variables.id] })
-      toast.success("Project updated successfully")
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to update project")
-    },
-  })
-
-  const deleteProject = useMutation({
-    mutationFn: async (projectId: string) => {
-      await projectsApi.delete(projectId)
-    },
-    onSuccess: (_, projectId) => {
-      queryClient.invalidateQueries({ queryKey: ["projects"] })
-      toast.success("Project deleted successfully")
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to delete project")
+    onSuccess: () => {
+      if (teamId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.all(teamId) })
+      }
     },
   })
 
   return {
-    createProject,
-    updateProject,
-    deleteProject,
+    projects: projectsQuery.data ?? [],
+    isLoading: projectsQuery.isLoading,
+    error: projectsQuery.error,
+    createProject: createProject.mutate,
+    isCreating: createProject.isPending,
   }
 } 

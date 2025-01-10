@@ -9,35 +9,26 @@ import { formatDistanceToNow } from "date-fns"
 import { useNotificationsQuery } from "@/hooks/useNotificationsQuery"
 import { Notification } from "@/types/database"
 
-interface AllNotificationsProps {
-    userId: string
-}
-
 const NOTIFICATIONS_PER_PAGE = 20
 
-export function AllNotifications({ userId }: AllNotificationsProps) {
+export function AllNotifications() {
     const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set())
     const [isBulkEditMode, setIsBulkEditMode] = useState(false)
-    const router = useRouter()
     const loadMoreRef = useRef<HTMLDivElement>(null)
+    const router = useRouter()
 
     const {
         notifications,
-        hasMore,
         isLoading,
-        isFetchingNextPage,
-        fetchNextPage,
-        refetch,
+        error,
         markAsRead,
+        markAllAsRead,
         deleteNotification,
         deleteAllNotifications,
-        deleteMultipleNotifications,
-        markMultipleAsRead,
-    } = useNotificationsQuery({
-        userId,
-        limit: NOTIFICATIONS_PER_PAGE,
-        isMenu: false,
-    })
+        hasNextPage,
+        fetchNextPage,
+        isFetchingNextPage,
+    } = useNotificationsQuery(NOTIFICATIONS_PER_PAGE, true)
 
     // Set up intersection observer for infinite scrolling
     useEffect(() => {
@@ -45,7 +36,7 @@ export function AllNotifications({ userId }: AllNotificationsProps) {
 
         const observer = new IntersectionObserver(
             (entries) => {
-                if (entries[0].isIntersecting && hasMore && !isFetchingNextPage) {
+                if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
                     void fetchNextPage()
                 }
             },
@@ -57,10 +48,10 @@ export function AllNotifications({ userId }: AllNotificationsProps) {
         }
 
         return () => observer.disconnect()
-    }, [hasMore, isFetchingNextPage, fetchNextPage])
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
     const handleRefresh = () => {
-        void refetch()
+        // Invalidation is handled by React Query
     }
 
     const handleNotificationClick = async (notification: Notification) => {
@@ -102,18 +93,34 @@ export function AllNotifications({ userId }: AllNotificationsProps) {
         }
     }
 
-    const handleDeleteSelected = async () => {
+    const handleMarkSelectedAsRead = async () => {
         const selectedIds = Array.from(selectedNotifications)
-        await deleteMultipleNotifications(selectedIds)
+        for (const id of selectedIds) {
+            await markAsRead(id)
+        }
         setSelectedNotifications(new Set())
         setIsBulkEditMode(false)
     }
 
-    const handleMarkSelectedAsRead = async () => {
-        const selectedIds = Array.from(selectedNotifications)
-        await markMultipleAsRead(selectedIds)
+    const handleMarkAllAsRead = async () => {
+        await markAllAsRead()
         setSelectedNotifications(new Set())
         setIsBulkEditMode(false)
+    }
+
+    if (error) {
+        return (
+            <div className="min-h-[400px] w-full flex flex-col items-center justify-center p-8 border rounded-lg">
+                <div className="text-destructive mb-4">Error loading notifications</div>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRefresh}
+                >
+                    Try Again
+                </Button>
+            </div>
+        )
     }
 
     return (
@@ -154,19 +161,28 @@ export function AllNotifications({ userId }: AllNotificationsProps) {
                                 <Button
                                     variant="destructive"
                                     size="sm"
-                                    onClick={handleDeleteSelected}
+                                    onClick={handleDeleteAllNotifications}
                                 >
                                     Delete Selected
                                 </Button>
                             </>
                         ) : (
-                            <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={handleDeleteAllNotifications}
-                            >
-                                Clear All
-                            </Button>
+                            <>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleMarkAllAsRead}
+                                >
+                                    Mark All as Read
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={handleDeleteAllNotifications}
+                                >
+                                    Clear All
+                                </Button>
+                            </>
                         )}
                     </div>
                 </div>
@@ -199,8 +215,8 @@ export function AllNotifications({ userId }: AllNotificationsProps) {
                             )}
                             <NotificationItem
                                 notification={notification}
-                                onClick={handleNotificationClick}
-                                dateFormatter={(date) => formatDistanceToNow(date, { addSuffix: true })}
+                                onClick={() => handleNotificationClick(notification)}
+                                dateFormatter={(date) => formatDistanceToNow(new Date(date), { addSuffix: true })}
                                 className="flex-1"
                             />
                             {!isBulkEditMode && (

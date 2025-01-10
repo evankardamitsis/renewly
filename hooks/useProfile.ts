@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/contexts/auth-context"
 import { queryKeys } from "@/lib/react-query"
+import React from "react"
 
 interface Profile {
   id: string
@@ -103,11 +104,25 @@ export function useProfile() {
       return getProfile(user.id)
     },
     enabled: !!user?.id,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 30 * 60 * 1000, // 30 minutes
-    refetchOnMount: false, // Only refetch if stale
-    refetchOnWindowFocus: false, // Only refetch if stale
+    staleTime: 30 * 60 * 1000, // Increase to 30 minutes
+    gcTime: 60 * 60 * 1000, // Increase to 1 hour
+    refetchOnMount: true, // Change to true to ensure data consistency
+    refetchOnWindowFocus: true, // Change to true but will use staleTime
+    retry: 2,
+    retryDelay: 1000,
+    placeholderData: (oldData) => oldData, // Keep old data while refetching
   })
+
+  // Prefetch profile data
+  React.useEffect(() => {
+    if (user?.id) {
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.auth.profile(user.id),
+        queryFn: () => getProfile(user.id),
+        staleTime: 30 * 60 * 1000,
+      })
+    }
+  }, [user?.id, queryClient])
 
   const { mutate: updateProfileMutation, isPending: isUpdating } = useMutation({
     mutationFn: (data: Partial<Profile>) => {

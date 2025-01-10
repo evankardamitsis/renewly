@@ -2,8 +2,9 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase/client"
-import { queryKeys, queryUtils } from "@/lib/react-query"
+import { queryKeys } from "@/lib/react-query"
 import { useProfile } from "./useProfile"
+import React from "react"
 
 export interface TeamMember {
     id: string
@@ -25,67 +26,83 @@ export interface Team {
     members: TeamMember[]
 }
 
-interface RawTeamMember {
-    id: string
-    user_id: string
-    role: "admin" | "member"
-    is_super_admin: boolean
-    profile: {
-        id: string
-        display_name: string | null
-        email: string | null
-        role: string | null
-    }[]
-}
-
-interface RawTeam {
-    id: string
-    name: string
-    image_url: string | null
-    members: RawTeamMember[]
-}
-
 const supabase = createClient()
+
+async function getTeamById(teamId: string): Promise<Team> {
+    // Get team data
+    const { data: team, error: teamError } = await supabase
+        .from("teams")
+        .select("*")
+        .eq("id", teamId)
+        .single()
+
+    if (teamError) throw teamError
+
+    // Get team members
+    const { data: members, error: membersError } = await supabase
+        .from("team_members")
+        .select("id, user_id, role, is_super_admin")
+        .eq("team_id", teamId)
+
+    if (membersError) throw membersError
+
+    // Get profiles for all members
+    const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, display_name, email, role")
+        .in("id", members.map(m => m.user_id))
+
+    if (profilesError) throw profilesError
+
+    // Transform the data to match our interface
+    const transformedMembers = members.map(member => ({
+        ...member,
+        profile: profiles.find(p => p.id === member.user_id) || {
+            id: member.user_id,
+            display_name: "Unknown User",
+            email: null,
+            role: member.role
+        }
+    }))
+
+    return {
+        ...team,
+        members: transformedMembers
+    }
+}
 
 export function useTeamQuery() {
     const { profile } = useProfile()
     const queryClient = useQueryClient()
     const teamId = profile?.current_team_id
 
-    // Combined query for team data and members
+    // Prefetch team data
+    React.useEffect(() => {
+        if (teamId) {
+            queryClient.prefetchQuery({
+                queryKey: queryKeys.teams.byId(teamId),
+                queryFn: () => getTeamById(teamId),
+                staleTime: 30 * 60 * 1000,
+            })
+        }
+    }, [teamId, queryClient])
+
+    // Combined query for team data and members with optimized caching
     const teamQuery = useQuery<Team | null>({
         queryKey: queryKeys.teams.byId(teamId ?? ""),
         queryFn: async () => {
             if (!teamId) return null
-            const data = await queryUtils.teams.getById(teamId) as RawTeam
-            
-            // Transform the data to match our expected types
-            return {
-                ...data,
-                members: data.members.map(member => ({
-                    ...member,
-                    profile: member.profile[0] // Take the first profile from the array
-                }))
-            }
+            return getTeamById(teamId)
         },
         enabled: !!teamId,
-        staleTime: 5 * 60 * 1000, // 5 minutes
+        staleTime: 30 * 60 * 1000, // 30 minutes
+        gcTime: 60 * 60 * 1000, // 1 hour
+        refetchOnMount: true,
+        refetchOnWindowFocus: true,
+        retry: 2,
+        retryDelay: 1000,
+        placeholderData: (oldData) => oldData,
     })
-
-    // Update team
-    const updateTeam = async (data: Partial<Team>) => {
-        if (!teamId) throw new Error("Team ID is required")
-
-        const { error } = await supabase
-            .from("teams")
-            .update(data)
-            .eq("id", teamId)
-
-        if (error) throw error
-
-        // Invalidate team queries
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teams.byId(teamId) })
-    }
 
     // Invite team member
     const inviteMember = async (email: string, role: "admin" | "member" = "member") => {
@@ -136,9 +153,8 @@ export function useTeamQuery() {
     return {
         team: teamQuery.data,
         isLoadingTeam: teamQuery.isLoading,
-        members: teamQuery.data?.members ?? [] as TeamMember[],
+        members: teamQuery.data?.members ?? [],
         isLoadingMembers: teamQuery.isLoading,
-        updateTeam,
         inviteMember,
         removeMember,
         updateMemberRole,

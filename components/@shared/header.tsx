@@ -218,6 +218,7 @@ export function Header() {
                             {
                               'text-purple-500': profile.is_super_admin,
                               'text-blue-500': !profile.is_super_admin && profile.role === 'admin',
+                              'text-gray-500': !profile.is_super_admin && profile.role === 'member'
                             }
                           )}>
                             {getRoleDisplay(profile.role, profile.is_super_admin)}

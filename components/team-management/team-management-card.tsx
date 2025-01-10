@@ -1,14 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Button } from "../ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { createClient } from "@/lib/supabase/client";
-import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import {
   Tooltip,
@@ -16,18 +14,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-interface TeamMember {
-  id: string;
-  user_id: string;
-  role: "admin" | "member";
-  is_super_admin: boolean;
-  profile: {
-    display_name: string;
-    email: string;
-    role: string;
-  };
-}
+import { useTeamQuery } from "@/hooks/useTeamQuery";
 
 export function TeamManagementCard({
   currentUserRole
@@ -37,122 +24,60 @@ export function TeamManagementCard({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [selectedRole, setSelectedRole] = useState<"admin" | "member">("member");
-  const [isInviting, setIsInviting] = useState(false);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-
-  useEffect(() => {
-    async function loadTeamMembers() {
-      try {
-        const supabase = createClient();
-
-        // Get current user first
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        // Then get their profile
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("current_team_id")
-          .eq("id", user.id)
-          .single();
-
-        if (!profile?.current_team_id) return;
-
-        // Get team members
-        const { data: members, error: membersError } = await supabase
-          .from("team_members")
-          .select("id, user_id, role, is_super_admin")
-          .eq("team_id", profile.current_team_id);
-
-        if (membersError) throw membersError;
-        if (!members?.length) return;
-
-        // Get profiles for these members
-        const { data: profiles, error: profilesError } = await supabase
-          .from("profiles")
-          .select("id, display_name, email, role")
-          .in("id", members.map(m => m.user_id));
-
-        if (profilesError) throw profilesError;
-
-        // Transform and combine the data
-        const transformedMembers = members.map(member => ({
-          ...member,
-          profile: profiles?.find(p => p.id === member.user_id) || {
-            display_name: "Unknown User",
-            email: "no-email",
-            role: "member"
-          }
-        }));
-
-        setTeamMembers(transformedMembers);
-      } catch (error) {
-        console.error("Error loading team members:", error);
-      }
-    }
-
-    loadTeamMembers();
-  }, []);
+  const { members, isLoadingMembers, inviteMember } = useTeamQuery();
 
   const handleInvite = async () => {
     if (!inviteEmail) return;
 
     try {
-      setIsInviting(true);
-      const supabase = createClient();
-
-      const { error } = await supabase
-        .from("team_invites")
-        .insert([
-          {
-            email: inviteEmail,
-            role: selectedRole,
-          },
-        ]);
-
-      if (error) throw error;
-
-      toast.success("Invitation sent successfully");
+      await inviteMember(inviteEmail, selectedRole);
       setInviteEmail("");
       setSelectedRole("member");
       setIsModalOpen(false);
     } catch (error) {
       console.error("Error sending invitation:", error);
-      toast.error("Failed to send invitation");
-    } finally {
-      setIsInviting(false);
     }
   };
 
   // Only show add button for admins and super admins
   const canInviteMembers = currentUserRole?.is_super_admin || currentUserRole?.role === "admin";
 
+  if (isLoadingMembers) {
+    return (
+      <Card className="bg-card/50">
+        <CardContent className="p-6">
+          <div className="text-center">Loading team members...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="bg-card/50">
       <CardHeader>
-        <CardTitle>Team Members ({teamMembers.length})</CardTitle>
+        <CardTitle>Team Members ({members.length})</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap gap-4">
           <TooltipProvider>
-            {teamMembers.map((member) => (
+            {members.map((member) => (
               <Tooltip key={member.id}>
                 <TooltipTrigger asChild>
                   <Avatar className="cursor-pointer">
                     <AvatarFallback>
                       {member.profile.display_name
-                        .split(" ")
+                        ?.split(" ")
                         .map((n) => n[0])
-                        .join("")}
+                        .join("") ?? "?"}
                     </AvatarFallback>
                   </Avatar>
                 </TooltipTrigger>
                 <TooltipContent>
                   <div className="space-y-1">
-                    <p className="font-medium">{member.profile.display_name}</p>
-                    <p className="text-xs">{member.profile.email}</p>
+                    <p className="font-medium">{member.profile.display_name ?? "Unknown"}</p>
+                    <p className="text-xs">{member.profile.email ?? "No email"}</p>
                     <p className="text-xs font-medium">
-                      {member.is_super_admin ? "Owner" : member.profile.role}
+                      {member.is_super_admin ? "Owner" : member.profile.role ?? "Member"}
                     </p>
                   </div>
                 </TooltipContent>
@@ -199,8 +124,8 @@ export function TeamManagementCard({
               </div>
             </div>
             <div className="flex justify-end">
-              <Button onClick={handleInvite} disabled={isInviting}>
-                {isInviting ? "Sending..." : "Send Invitation"}
+              <Button onClick={handleInvite}>
+                Send Invitation
               </Button>
             </div>
           </DialogContent>

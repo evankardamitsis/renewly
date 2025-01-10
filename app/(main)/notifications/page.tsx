@@ -15,7 +15,7 @@ export default async function NotificationsPage() {
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold">Notifications</h1>
             </div>
-            <AllNotifications userId={user.id} />
+            <AllNotifications />
         </div>
     )
 } 

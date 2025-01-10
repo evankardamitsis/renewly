@@ -21,6 +21,7 @@ export const queryKeys = {
     notifications: {
         all: (userId: string) => ["notifications", userId] as const,
         unread: (userId: string) => ["notifications", userId, "unread"] as const,
+        infinite: (userId: string) => ["notifications", userId, "infinite"] as const,
     },
 }
 

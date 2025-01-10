@@ -29,8 +29,8 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
         );
 
-        // Parse request body for specific task ID
-        const { taskId } = await req.json().catch(() => ({}));
+        // Parse request body for specific task ID and test mode
+        const { task_id, test_mode } = await req.json().catch(() => ({}));
 
         // Get tasks due in the next 2 days
         const now = new Date();
@@ -51,18 +51,24 @@ serve(async (req) => {
                     name
                 )
             `)
-            .gte("due_date", now.toISOString())
-            .lte("due_date", twoDaysFromNow.toISOString())
             .not("assigned_to", "is", null);
 
-        // If taskId is provided, only check that specific task
-        if (taskId) {
-            query = query.eq("id", taskId);
+        // If in test mode, only check the specific task regardless of due date
+        if (test_mode && task_id) {
+            query = query.eq("id", task_id);
+        } else {
+            // Normal mode: check tasks due in the next 2 days
+            query = query
+                .gte("due_date", now.toISOString())
+                .lte("due_date", twoDaysFromNow.toISOString());
+
+            // If task_id is provided, only check that specific task
+            if (task_id) {
+                query = query.eq("id", task_id);
+            }
         }
 
-        const { data: tasks, error: tasksError } = await query.returns<
-            Task[]
-        >();
+        const { data: tasks, error: tasksError } = await query.returns<Task[]>();
 
         if (tasksError) {
             throw tasksError;
@@ -71,7 +77,7 @@ serve(async (req) => {
         if (!tasks || tasks.length === 0) {
             return new Response(
                 JSON.stringify({
-                    message: taskId
+                    message: task_id
                         ? "Specified task not found or not due soon"
                         : "No tasks found due in the next 2 days",
                 }),
@@ -91,81 +97,90 @@ serve(async (req) => {
             try {
                 const projectName = task.project?.name || "Unknown Project";
 
-                // Check if notification already exists for this task
-                const oneDayAgo = new Date();
-                oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+                // In test mode, skip notification existence check
+                let shouldCreateNotification = test_mode;
 
-                const { data: existingNotifications, error: checkError } =
-                    await supabase
-                        .from("notifications")
-                        .select("id")
-                        .eq("task_id", task.id)
-                        .eq("type", "DUE_DATE")
-                        .eq("read", false)
-                        .gte("created_at", oneDayAgo.toISOString());
+                if (!test_mode) {
+                    // Check if notification already exists for this task
+                    const oneDayAgo = new Date();
+                    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
 
-                if (checkError) throw checkError;
+                    const { data: existingNotifications, error: checkError } =
+                        await supabase
+                            .from("notifications")
+                            .select("id")
+                            .eq("task_id", task.id)
+                            .eq("type", "DUE_DATE")
+                            .eq("read", false)
+                            .gte("created_at", oneDayAgo.toISOString());
 
-                // Skip if notification already exists within the last day
-                if (existingNotifications?.length > 0) continue;
+                    if (checkError) throw checkError;
 
-                // Create notification if none exists
-                const { data: notification, error: notificationError } =
-                    await supabase
-                        .from("notifications")
-                        .insert({
-                            user_id: task.assigned_to,
-                            type: "DUE_DATE",
-                            title: "Task Due Soon",
-                            message:
-                                `Task "${task.title}" in project "${projectName}" is due ${
-                                    new Date(task.due_date).toLocaleDateString()
-                                }`,
-                            task_id: task.id,
-                            project_id: task.project_id,
-                            read: false,
-                            action_url:
-                                `/projects/${task.project_id}/tasks/${task.id}`,
-                        })
-                        .select()
-                        .single();
-
-                if (notificationError) throw notificationError;
-
-                // Trigger email notification
-                try {
-                    const emailResponse = await fetch(
-                        `${
-                            Deno.env.get("SUPABASE_URL")
-                        }/functions/v1/send-notification-email`,
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                                "Authorization": `Bearer ${
-                                    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
-                                }`,
-                            },
-                            body: JSON.stringify({
-                                notification_id: notification.id,
-                            }),
-                        },
-                    );
-
-                    if (!emailResponse.ok) {
-                        console.error(
-                            "Failed to trigger email notification:",
-                            await emailResponse.text(),
-                        );
-                    }
-                } catch (emailError) {
-                    console.error(
-                        "Error triggering email notification:",
-                        emailError,
-                    );
+                    // Skip if notification already exists within the last day
+                    shouldCreateNotification = !existingNotifications?.length;
                 }
 
-                notifications.push(notification);
+                if (shouldCreateNotification) {
+                    // Create notification
+                    const { data: notification, error: notificationError } =
+                        await supabase
+                            .from("notifications")
+                            .insert({
+                                user_id: task.assigned_to,
+                                type: "DUE_DATE",
+                                title: "Task Due Soon",
+                                message:
+                                    `Task "${task.title}" in project "${projectName}" is due ${
+                                        new Date(task.due_date).toLocaleDateString()
+                                    }`,
+                                task_id: task.id,
+                                project_id: task.project_id,
+                                read: false,
+                                action_url:
+                                    `/projects/${task.project_id}/tasks/${task.id}`,
+                            })
+                            .select()
+                            .single();
+
+                    if (notificationError) throw notificationError;
+
+                    // Only send email in non-test mode
+                    if (!test_mode) {
+                        try {
+                            const emailResponse = await fetch(
+                                `${
+                                    Deno.env.get("SUPABASE_URL")
+                                }/functions/v1/send-notification-email`,
+                                {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        "Authorization": `Bearer ${
+                                            Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+                                        }`,
+                                    },
+                                    body: JSON.stringify({
+                                        notification_id: notification.id,
+                                    }),
+                                },
+                            );
+
+                            if (!emailResponse.ok) {
+                                console.error(
+                                    "Failed to trigger email notification:",
+                                    await emailResponse.text(),
+                                );
+                            }
+                        } catch (emailError) {
+                            console.error(
+                                "Error triggering email notification:",
+                                emailError,
+                            );
+                        }
+                    }
+
+                    notifications.push(notification);
+                }
             } catch (error) {
                 console.error(`Error processing task ${task.id}:`, error);
             }

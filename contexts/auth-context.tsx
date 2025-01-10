@@ -6,7 +6,8 @@ import {
     useEffect,
     useState,
     useCallback,
-    ReactNode
+    ReactNode,
+    useMemo
 } from "react"
 import { User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/client"
@@ -83,16 +84,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     }, [supabase.auth, refreshUser, router])
 
+    // Memoize the context value
+    const value = useMemo(() => ({
+        user,
+        isLoading,
+        isAuthenticated: !!user,
+        signOut,
+        refreshUser
+    }), [user, isLoading, signOut, refreshUser])
+
     return (
-        <AuthContext.Provider
-            value={{
-                user,
-                isLoading,
-                isAuthenticated: !!user,
-                signOut,
-                refreshUser,
-            }}
-        >
+        <AuthContext.Provider value={value}>
             {children}
         </AuthContext.Provider>
     )

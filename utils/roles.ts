@@ -59,16 +59,16 @@ export function hasRoleAccess(
 }
 
 // Helper to get role display name
-export function getRoleDisplay(role: TeamRole): string {
-    if (role.is_super_admin) return "Owner";
-    if (role.role === "admin") return "Admin";
+export function getRoleDisplay(role: "admin" | "member" | null, isSuperAdmin?: boolean): string {
+    if (isSuperAdmin) return "Owner";
+    if (role === "admin") return "Admin";
     return "Member";
 }
 
 // Helper to get role color
-export function getRoleColor(role: TeamRole): string {
-    if (role.is_super_admin) return "purple-500";
-    if (role.role === "admin") return "blue-500";
+export function getRoleColor(role: "admin" | "member" | null, isSuperAdmin?: boolean): string {
+    if (isSuperAdmin) return "purple-500";
+    if (role === "admin") return "blue-500";
     return "green-500";
 }
 

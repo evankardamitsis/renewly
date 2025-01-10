@@ -1,15 +1,21 @@
+"use client"
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/contexts/auth-context"
+import { queryKeys } from "@/lib/react-query"
 
 interface Profile {
   id: string
   display_name: string | null
   email: string | null
   current_team_id: string | null
+  has_completed_onboarding: boolean
   role: "admin" | "member" | null
   is_super_admin?: boolean
   team?: {
+    id: string
+    name: string
     image_url: string | null
   } | null
 }
@@ -17,45 +23,60 @@ interface Profile {
 const supabase = createClient()
 
 async function getProfile(userId: string) {
-  // First get the profile
+  // Get the profile data
   const { data: profileData, error: profileError } = await supabase
     .from("profiles")
-    .select("id, display_name, email, current_team_id")
+    .select(`
+      id,
+      display_name,
+      email,
+      role,
+      current_team_id,
+      has_completed_onboarding
+    `)
     .eq("id", userId)
-    .single()
+    .single();
 
-  if (profileError) throw profileError
+  if (profileError) throw profileError;
 
-  // Then get the team member role
+  // Get team data if we have a current_team_id
+  let team = null;
+  if (profileData.current_team_id) {
+    const { data: teamData, error: teamError } = await supabase
+      .from("teams")
+      .select("id, name, image_url")
+      .eq("id", profileData.current_team_id)
+      .single();
+
+    if (!teamError && teamData) {
+      team = teamData;
+    }
+  }
+
+  // Get team member data separately
   const { data: teamMemberData, error: teamMemberError } = await supabase
     .from("team_members")
     .select("role, is_super_admin")
     .eq("user_id", userId)
     .eq("team_id", profileData.current_team_id)
-    .single()
+    .single();
 
-  if (teamMemberError && teamMemberError.code !== "PGRST116") { // Ignore not found error
-    throw teamMemberError
-  }
-
-  // Get team data if we have a team
-  let teamData = null
-  if (profileData.current_team_id) {
-    const { data: team, error: teamError } = await supabase
-      .from("teams")
-      .select("image_url")
-      .eq("id", profileData.current_team_id)
-      .single()
-
-    if (teamError) throw teamError
-    teamData = team
-  }
+  if (teamMemberError) throw teamMemberError;
 
   return {
-    ...profileData,
-    ...teamMemberData,
-    team: teamData
-  }
+    id: profileData.id,
+    display_name: profileData.display_name,
+    email: profileData.email,
+    role: profileData.role,
+    current_team_id: profileData.current_team_id,
+    has_completed_onboarding: profileData.has_completed_onboarding,
+    is_super_admin: teamMemberData?.is_super_admin ?? false,
+    team: team ? {
+      id: team.id,
+      name: team.name,
+      image_url: team.image_url
+    } : null
+  } satisfies Profile;
 }
 
 async function updateProfile(userId: string, data: Partial<Profile>) {
@@ -76,12 +97,16 @@ export function useProfile() {
     isLoading,
     error
   } = useQuery({
-    queryKey: ["profile", user?.id],
+    queryKey: queryKeys.auth.profile(user?.id ?? ""),
     queryFn: () => {
       if (!user?.id) throw new Error("User ID is required")
       return getProfile(user.id)
     },
     enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    refetchOnMount: false, // Only refetch if stale
+    refetchOnWindowFocus: false, // Only refetch if stale
   })
 
   const { mutate: updateProfileMutation, isPending: isUpdating } = useMutation({
@@ -91,7 +116,12 @@ export function useProfile() {
     },
     onSuccess: () => {
       if (user?.id) {
-        queryClient.invalidateQueries({ queryKey: ["profile", user.id] })
+        // Invalidate all related queries
+        queryClient.invalidateQueries({ queryKey: queryKeys.auth.profile(user.id) })
+        if (profile?.current_team_id) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.teams.byId(profile.current_team_id) })
+          queryClient.invalidateQueries({ queryKey: queryKeys.teams.members(profile.current_team_id) })
+        }
       }
     },
   })

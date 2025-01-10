@@ -1,196 +1,61 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Plus, Clock, Users } from "lucide-react";
 import { TaskModal } from "@/components/tasks/task-modal";
 import { ProjectModal } from "@/components/projects/project-modal";
-import { Task } from "@/types/database";
-import { ChatCard } from "@/components/dashboard/chat-card";
 import { ActiveProjectsCard } from "@/components/dashboard/active-projects-card";
 import { TeamManagementCard } from "@/components/team-management/team-management-card";
-import { createClient } from "@/lib/supabase/client";
+import { ChatCard } from "@/components/dashboard/chat-card";
+import { useAuth } from "@/contexts/auth-context";
+import { useProfile } from "@/hooks/useProfile";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { PerformanceCard } from "@/components/dashboard/performance-card";
-import { tasksApi } from "@/services/api";
-import { useProjectActions } from "@/hooks/useProjectActions";
 
-interface TeamMemberData {
-  id: string;
-  user_id: string;
-  role: "admin" | "member";
-  is_super_admin: boolean;
-  profiles: {
-    display_name: string;
-    email: string;
-  }[];
-}
+function DashboardSkeleton() {
+  return (
+    <div className="container py-6 space-y-8">
+      <div className="flex items-start justify-between">
+        <div>
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-5 w-64 mt-2" />
+        </div>
+        <Skeleton className="h-10 w-32" />
+      </div>
 
-interface Team {
-  id: string;
-  name: string;
-  image_url: string | null;
-  members: {
-    id: string;
-    profile: {
-      display_name: string;
-      email: string;
-    };
-  }[];
-}
-
-interface Profile {
-  display_name: string | null;
-  role: string | null;
-  current_team_id: string | null;
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <Skeleton className="h-[350px] rounded-xl" />
+        <Skeleton className="h-[350px] rounded-xl" />
+        <Skeleton className="h-[350px] rounded-xl" />
+      </div>
+    </div>
+  );
 }
 
 export default function DashboardPage() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [team, setTeam] = useState<Team | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [userRole, setUserRole] = useState<{ role: string; is_super_admin: boolean } | null>(null);
+  const { user, isLoading } = useAuth();
+  const { profile, isLoading: isProfileLoading } = useProfile();
   const router = useRouter();
-  const { createProject, isCreating } = useProjectActions();
 
   useEffect(() => {
-    async function loadDashboardData() {
-      try {
-        const supabase = createClient();
-
-        // Get current user
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          router.push("/login");
-          return;
-        }
-
-        // Get user profile
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select("display_name, role, current_team_id")
-          .eq("id", user.id)
-          .single();
-
-        if (profileError) throw profileError;
-        setProfile(profileData);
-
-        // Get current user's role from team_members
-        const { data: userRole } = await supabase
-          .from("team_members")
-          .select("role, is_super_admin")
-          .eq("user_id", user.id)
-          .eq("team_id", profileData.current_team_id)
-          .single();
-
-        setUserRole(userRole);
-
-        // Get current team if exists
-        if (profileData.current_team_id) {
-          const { data: teamData, error: teamError } = await supabase
-            .from("teams")
-            .select(`
-              id,
-              name,
-              image_url,
-              members:team_members(
-                id,
-                user_id,
-                role,
-                is_super_admin,
-                profiles(
-                  display_name,
-                  email
-                )
-              )
-            `)
-            .eq("id", profileData.current_team_id)
-            .single();
-
-          if (teamError) throw teamError;
-
-          // Transform members data to match TeamMember interface
-          const transformedTeam = {
-            ...teamData,
-            members: (teamData.members || [])
-              .filter(m => m.profiles?.length > 0)
-              .map((m: TeamMemberData) => ({
-                id: m.id,
-                user_id: m.user_id,
-                role: m.role,
-                is_super_admin: m.is_super_admin,
-                profile: m.profiles[0]
-              }))
-          };
-          setTeam(transformedTeam);
-        }
-      } catch (error) {
-        console.error("Error loading dashboard:", error);
-        toast.error("Failed to load dashboard data");
-      } finally {
-        setLoading(false);
-      }
+    if (!isLoading && !user) {
+      router.push("/login");
     }
+  }, [user, isLoading, router]);
 
-    loadDashboardData();
-  }, [router]);
+  if (isLoading || isProfileLoading) {
+    return <DashboardSkeleton />;
+  }
 
-  const handleTaskCreate = async (taskData: Partial<Task>): Promise<void> => {
-    try {
-      if (!team?.id) throw new Error("No team selected");
-
-      // Get the first project from the team or show project selection modal
-      const supabase = createClient();
-      const { data: project } = await supabase
-        .from("projects")
-        .select("id")
-        .eq("team_id", team.id)
-        .limit(1)
-        .single();
-
-      if (!project) throw new Error("No project found");
-
-      await tasksApi.create(project.id, taskData);
-      setIsTaskModalOpen(false);
-      toast.success("Task created successfully");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to create task"
-      );
-    }
-  };
-
-  const handleProjectCreate = async ({
-    name,
-    description,
-  }: {
-    name: string;
-    description: string;
-  }) => {
-    const { project } = await createProject({
-      name,
-      description,
-    });
-
-    if (project) {
-      setIsProjectModalOpen(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    );
+  if (!user) {
+    return null;
   }
 
   return (
@@ -202,8 +67,7 @@ export default function DashboardPage() {
             Welcome back, {profile?.display_name || "there"}!
           </h1>
           <p className="text-muted-foreground mt-2">
-            {profile?.role || "Team Member"} ·{" "}
-            {team?.name || "Personal Workspace"}
+            {profile?.role || "Team Member"} · {profile?.team?.name}
           </p>
         </div>
         <Button onClick={() => setIsProjectModalOpen(true)}>
@@ -259,8 +123,8 @@ export default function DashboardPage() {
         {/* Team Management Card */}
         <TeamManagementCard
           currentUserRole={{
-            role: userRole?.role || "member",
-            is_super_admin: userRole?.is_super_admin || false
+            role: profile?.role ?? "member",
+            is_super_admin: profile?.is_super_admin ?? false
           }}
         />
 
@@ -349,20 +213,25 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-
-        <TaskModal
-          isOpen={isTaskModalOpen}
-          onClose={() => setIsTaskModalOpen(false)}
-          onSave={handleTaskCreate}
-        />
-
-        <ProjectModal
-          open={isProjectModalOpen}
-          onOpenChange={setIsProjectModalOpen}
-          onSubmit={handleProjectCreate}
-          loading={isCreating}
-        />
       </div>
+
+      <TaskModal
+        isOpen={isTaskModalOpen}
+        onClose={() => setIsTaskModalOpen(false)}
+        onSave={async () => {
+          // Handle task creation
+          setIsTaskModalOpen(false)
+        }}
+      />
+
+      <ProjectModal
+        open={isProjectModalOpen}
+        onOpenChange={setIsProjectModalOpen}
+        onSubmit={async () => {
+          // Handle project creation
+          setIsProjectModalOpen(false)
+        }}
+      />
     </div>
   );
 }

@@ -4,18 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Sheet,
-  SheetContent,
-  SheetTrigger,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,57 +13,33 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MainNav } from "@/components/@shared/main-nav";
-import {
-  Mic,
-  LayoutGrid,
-  Plus,
-  LogOut,
-  User as UserIcon,
-} from "lucide-react";
+import { Mic, Plus, LogOut, User as UserIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/@shared/theme-toggle";
 import Link from "next/link";
-import { teamsApi } from "@/services/api";
-import { useAsync } from "@/hooks/useAsync";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { getRoleDisplay, hasRoleAccess } from "@/utils/roles";
-import { NotificationsMenu } from './notifications-menu'
+import { getRoleDisplay } from "@/utils/roles";
+import { NotificationsMenu } from './notifications-menu';
 import { useAuth } from "@/contexts/auth-context";
 import { useProfile } from "@/hooks/useProfile";
+import { useTeamQuery } from "@/hooks/useTeamQuery";
 
 export function Header() {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
-  const { loading: isInviting, execute } = useAsync();
   const { user, isLoading: isAuthLoading, signOut } = useAuth();
   const { profile, isLoading: isProfileLoading } = useProfile();
+  const { team, members, inviteMember, isLoadingTeam } = useTeamQuery();
 
-  const isLoading = isAuthLoading || isProfileLoading;
-
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
+  const isLoading = isAuthLoading || isProfileLoading || isLoadingTeam;
 
   const handleInviteMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile?.current_team_id) return;
-
     try {
-      await execute(
-        teamsApi.invite(profile.current_team_id, inviteEmail, inviteRole),
-        "Invitation sent successfully"
-      );
+      await inviteMember(inviteEmail, inviteRole);
       setInviteEmail("");
       setInviteRole("member");
       setIsInviteModalOpen(false);
@@ -140,14 +105,16 @@ export function Header() {
               {/* Team Section */}
               <div className="flex items-center gap-2">
                 <div className="flex -space-x-2">
-                  <Avatar className="border-2 border-background size-6">
-                    <AvatarImage src="/placeholder.svg" />
-                    <AvatarFallback>CM</AvatarFallback>
-                  </Avatar>
-                  <Avatar className="border-2 border-background size-6">
-                    <AvatarImage src="/placeholder.svg" />
-                    <AvatarFallback>SO</AvatarFallback>
-                  </Avatar>
+                  {members?.slice(0, 2).map((member) => (
+                    <Avatar key={member.id} className="border-2 border-background size-6">
+                      <AvatarImage src="/placeholder.svg" />
+                      <AvatarFallback>
+                        {member.profile?.display_name?.[0]?.toUpperCase() ||
+                          member.profile?.email?.[0]?.toUpperCase() ||
+                          'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                  ))}
                 </div>
                 <Button
                   variant="secondary"
@@ -202,8 +169,8 @@ export function Header() {
                         </p>
                       </div>
                     </div>
-                    <Button type="submit" disabled={isInviting}>
-                      {isInviting ? "Sending..." : "Send Invitation"}
+                    <Button type="submit" disabled={isLoading}>
+                      {isLoading ? "Sending..." : "Send Invitation"}
                     </Button>
                   </form>
                 </DialogContent>
@@ -222,7 +189,7 @@ export function Header() {
                     >
                       <Avatar>
                         <AvatarImage
-                          src={profile?.team?.image_url || "/placeholder.svg"}
+                          src={team?.image_url || "/placeholder.svg"}
                           onError={(e) =>
                             (e.currentTarget.src = "/placeholder.svg")
                           }
@@ -242,78 +209,45 @@ export function Header() {
                         <p className="text-sm font-medium leading-none">
                           {profile?.display_name || user.email}
                         </p>
+                        <p className="text-xs leading-none text-muted-foreground">
+                          {user.email}
+                        </p>
                         {profile?.role && (
                           <p className={cn(
                             "text-xs font-medium",
                             {
                               'text-purple-500': profile.is_super_admin,
                               'text-blue-500': !profile.is_super_admin && profile.role === 'admin',
-                              'text-green-500': !profile.is_super_admin && profile.role === 'member'
                             }
                           )}>
-                            {getRoleDisplay({
-                              role: profile.role,
-                              is_super_admin: profile.is_super_admin || false
-                            })}
+                            {getRoleDisplay(profile.role, profile.is_super_admin)}
                           </p>
                         )}
-                        <p className="text-xs leading-none text-muted-foreground">
-                          {user.email}
-                        </p>
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
-                      <Link href="/account" className="cursor-pointer">
+                      <Link href="/account">
                         <UserIcon className="mr-2 size-4" />
-                        <span>Account settings</span>
+                        Account Settings
                       </Link>
                     </DropdownMenuItem>
-                    {/* Only show team management for admins and above */}
-                    {profile?.role && hasRoleAccess(
-                      {
-                        role: profile.role,
-                        is_super_admin: profile.is_super_admin || false
-                      },
-                      "ADMIN"
-                    ) && (
-                        <DropdownMenuItem asChild>
-                          <Link href="/team/settings" className="cursor-pointer">
-                            <UserIcon className="mr-2 size-4" />
-                            <span>Team settings</span>
-                          </Link>
-                        </DropdownMenuItem>
-                      )}
-                    <DropdownMenuItem
-                      onClick={signOut}
-                      className="text-destructive cursor-pointer"
-                      disabled={isLoading}
-                    >
+                    {profile?.role === 'admin' || profile?.is_super_admin ? (
+                      <DropdownMenuItem asChild>
+                        <Link href="/team/settings">
+                          <UserIcon className="mr-2 size-4" />
+                          Team Settings
+                        </Link>
+                      </DropdownMenuItem>
+                    ) : null}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => signOut()}>
                       <LogOut className="mr-2 size-4" />
-                      <span>{isLoading ? "Signing out..." : "Sign out"}</span>
+                      Log out
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-
-              {/* Menu */}
-              <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
-                <SheetTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="ml-2"
-                    onClick={toggleSidebar}
-                  >
-                    <LayoutGrid className="size-5" />
-                    <span className="sr-only">Toggle menu</span>
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="right" className="w-[300px] sm:w-[400px] p-0">
-                  <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-                  <MainNav />
-                </SheetContent>
-              </Sheet>
             </>
           )}
         </div>

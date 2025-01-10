@@ -13,7 +13,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { PerformanceCard } from "@/components/dashboard/performance-card";
 
@@ -140,8 +140,7 @@ export default function DashboardPage() {
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src="/placeholder.svg" />
-                  <AvatarFallback>U1</AvatarFallback>
+                  <AvatarFallback>U</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 space-y-1">
                   <p className="text-sm font-medium">Creating persona</p>
@@ -155,8 +154,7 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-center gap-4">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src="/placeholder.svg" />
-                  <AvatarFallback>U2</AvatarFallback>
+                  <AvatarFallback>U</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 space-y-1">
                   <p className="text-sm font-medium">Documents & sorting</p>
@@ -195,12 +193,10 @@ export default function DashboardPage() {
                     <span>Team:</span>
                     <div className="flex -space-x-2">
                       <Avatar className="h-6 w-6 border-2 border-background">
-                        <AvatarImage src="/placeholder.svg" />
-                        <AvatarFallback>U1</AvatarFallback>
+                        <AvatarFallback>U</AvatarFallback>
                       </Avatar>
                       <Avatar className="h-6 w-6 border-2 border-background">
-                        <AvatarImage src="/placeholder.svg" />
-                        <AvatarFallback>U2</AvatarFallback>
+                        <AvatarFallback>U</AvatarFallback>
                       </Avatar>
                     </div>
                   </div>

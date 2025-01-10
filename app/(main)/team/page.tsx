@@ -27,8 +27,7 @@ interface TeamMember {
 const initialMembers: TeamMember[] = [
   {
     id: "1",
-    name: "Alex Smith",
-    image: "/placeholder.svg",
+    name: "John Doe",
     role: "Product Designer",
     email: "alex@renewly.com",
     phone: "+1 234 567 890",
@@ -36,8 +35,7 @@ const initialMembers: TeamMember[] = [
   },
   {
     id: "2",
-    name: "Sarah Johnson",
-    image: "/placeholder.svg",
+    name: "Jane Smith",
     role: "Frontend Developer",
     email: "sarah@renewly.com",
     phone: "+1 234 567 890",
@@ -46,7 +44,6 @@ const initialMembers: TeamMember[] = [
   {
     id: "3",
     name: "Mike Brown",
-    image: "/placeholder.svg",
     role: "Backend Developer",
     email: "mike@renewly.com",
     phone: "+1 234 567 890",
@@ -109,8 +106,8 @@ export default function TeamPage() {
                   member.status === "active"
                     ? "default"
                     : member.status === "busy"
-                    ? "destructive"
-                    : "secondary"
+                      ? "destructive"
+                      : "secondary"
                 }
               >
                 {member.status}

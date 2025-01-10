@@ -21,9 +21,8 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="mb-4 flex items-center gap-4">
-              <Avatar>
-                <AvatarImage src="/placeholder.svg" />
-                <AvatarFallback>GM</AvatarFallback>
+              <Avatar className="h-8 w-8">
+                <AvatarFallback>U</AvatarFallback>
               </Avatar>
               <div>
                 <Badge variant="outline">2 tasks</Badge>

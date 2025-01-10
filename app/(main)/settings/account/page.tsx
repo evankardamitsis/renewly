@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -26,12 +26,17 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+interface Profile {
+    name: string;
+    email: string;
+    avatar?: string;
+}
+
 export default function AccountPage() {
     const [isEditing, setIsEditing] = useState(false);
-    const [profile, setProfile] = useState({
+    const [profile, setProfile] = useState<Profile>({
         name: "John Doe",
-        email: "john@example.com",
-        avatar: "/placeholder.svg",
+        email: "john@example.com"
     });
 
     const handleSave = () => {
@@ -51,7 +56,6 @@ export default function AccountPage() {
                 <CardContent className="space-y-6">
                     <div className="flex items-center gap-6">
                         <Avatar className="h-20 w-20">
-                            <AvatarImage src={profile.avatar} alt={profile.name} />
                             <AvatarFallback>{profile.name[0]}</AvatarFallback>
                         </Avatar>
                         <div className="space-y-2">

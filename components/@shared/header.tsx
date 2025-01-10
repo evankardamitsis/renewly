@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -32,7 +32,7 @@ export function Header() {
   const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
   const { user, isLoading: isAuthLoading, signOut } = useAuth();
   const { profile, isLoading: isProfileLoading } = useProfile();
-  const { team, members, inviteMember, isLoadingTeam } = useTeamQuery();
+  const { members, inviteMember, isLoadingTeam } = useTeamQuery();
 
   const isLoading = isAuthLoading || isProfileLoading || isLoadingTeam;
 
@@ -107,7 +107,6 @@ export function Header() {
                 <div className="flex -space-x-2">
                   {members?.slice(0, 2).map((member) => (
                     <Avatar key={member.id} className="border-2 border-background size-6">
-                      <AvatarImage src="/placeholder.svg" />
                       <AvatarFallback>
                         {member.profile?.display_name?.[0]?.toUpperCase() ||
                           member.profile?.email?.[0]?.toUpperCase() ||
@@ -183,22 +182,10 @@ export function Header() {
               <div className="flex items-center gap-4">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      className="relative size-8 rounded-full"
-                    >
-                      <Avatar>
-                        <AvatarImage
-                          src={team?.image_url || "/placeholder.svg"}
-                          onError={(e) =>
-                            (e.currentTarget.src = "/placeholder.svg")
-                          }
-                          alt={`${profile?.display_name || "User"}'s team avatar`}
-                          className="object-cover"
-                        />
+                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                      <Avatar className="h-8 w-8">
                         <AvatarFallback>
-                          {profile?.display_name?.[0] ||
-                            user?.email?.[0].toUpperCase()}
+                          {profile?.display_name?.charAt(0) ?? "U"}
                         </AvatarFallback>
                       </Avatar>
                     </Button>

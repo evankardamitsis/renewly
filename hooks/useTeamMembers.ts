@@ -2,73 +2,67 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { useUserContext } from "./useUserContext";
 
 export interface TeamMember {
     id: string;
     name: string;
     email: string;
     image?: string;
-    role?: string;
-    is_super_admin?: boolean;
+    role: string;
+    is_super_admin: boolean;
+}
+
+interface UserContextData {
+    currentTeamId: string;
 }
 
 export function useTeamMembers() {
-    const supabase = createClient();
-    const { data: userContext, isLoading: isLoadingContext } = useUserContext();
+    const userContext = useQuery<UserContextData>({
+        queryKey: ["userContext"],
+    });
+    const currentTeamId = userContext.data?.currentTeamId;
 
-    const { data: teamMembers = [], isLoading, error } = useQuery<
-        TeamMember[],
-        Error
-    >({
-        queryKey: ["teamMembers", userContext?.currentTeamId],
+    return useQuery({
+        queryKey: ["teamMembers", currentTeamId],
         queryFn: async () => {
-            if (!userContext?.currentTeamId) return [];
+            if (!currentTeamId) throw new Error("No team ID available");
 
-            // Get team members with profiles in a single query using joins
+            const supabase = createClient();
             const { data: members, error: membersError } = await supabase
                 .from("team_members")
-                .select(`
-                    user_id,
-                    role,
-                    is_super_admin
-                `)
-                .eq("team_id", userContext.currentTeamId);
+                .select("*")
+                .eq("team_id", currentTeamId);
 
             if (membersError) throw membersError;
-            if (!members || !members.length) return [];
+            if (!members) return [];
 
-            // Get profiles for these members
+            // Get all user IDs from team members
+            const userIds = members.map((member) => member.user_id);
+
+            // Fetch profiles for these users
             const { data: profiles, error: profilesError } = await supabase
                 .from("profiles")
                 .select("id, display_name, email, avatar_url")
-                .in("id", members.map((m) => m.user_id));
+                .in("id", userIds);
 
             if (profilesError) throw profilesError;
             if (!profiles) return [];
 
-            // Map the data combining both arrays
+            // Map team members with their profile information
             return members.map((member) => {
                 const profile = profiles.find((p) => p.id === member.user_id);
                 return {
                     id: member.user_id,
-                    name: profile?.display_name ||
-                        profile?.email?.split("@")[0] || "Unknown",
+                    name: profile?.display_name || "Unknown",
                     email: profile?.email || "",
-                    image: profile?.avatar_url || undefined,
+                    image: profile?.avatar_url,
                     role: member.role,
                     is_super_admin: member.is_super_admin,
                 };
             });
         },
-        enabled: !!userContext?.currentTeamId,
-        staleTime: 1000 * 60 * 5, // 5 minutes
-        gcTime: 1000 * 60 * 30, // 30 minutes
+        enabled: !!currentTeamId,
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        gcTime: 30 * 60 * 1000, // 30 minutes
     });
-
-    return {
-        teamMembers,
-        loading: isLoading || isLoadingContext,
-        error,
-    };
 }

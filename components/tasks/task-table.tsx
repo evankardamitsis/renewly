@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Trash, RefreshCw } from "lucide-react";
-import { Database } from "@/types/database";
+import { Task } from "@/types/task";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { AssigneeSelect } from "./assignee-select";
 import { toast } from "sonner";
@@ -17,7 +17,7 @@ import { addDays, addMonths, addWeeks, addYears, isWithinInterval, subDays, form
 import { TaskDetails } from "./task-details";
 
 interface TaskTableProps {
-  tasks: Database["public"]["Tables"]["tasks"]["Row"][];
+  tasks: Task[];
   onTaskDelete: (taskId: string) => void;
   onTaskUpdate: () => void;
 }
@@ -73,11 +73,12 @@ const isNearDueDate = (dueDate: string | null) => {
 };
 
 export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps) {
-  const { teamMembers } = useTeamMembers();
+  const { data: teamMembersData } = useTeamMembers();
+  const teamMembers = teamMembersData || [];
   const [editingAssignee, setEditingAssignee] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<Database["public"]["Tables"]["tasks"]["Row"] | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const supabase = useMemo(() => createClient(), []);
   const queryClient = useQueryClient();
 
@@ -151,7 +152,7 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps)
     }
   };
 
-  const handleRenewTask = async (task: Database["public"]["Tables"]["tasks"]["Row"]) => {
+  const handleRenewTask = async (task: Task) => {
     if (!task.is_recurring || !task.recurring_interval || !task.due_date) return;
 
     try {

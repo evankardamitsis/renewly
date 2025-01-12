@@ -1,26 +1,22 @@
 "use client";
 
-import { CustomField, RecurringInterval, Task } from "@/types/task";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { formatDistanceToNow } from "date-fns";
-import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { AssigneeSelect } from "./assignee-select";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { Plus, X } from "lucide-react";
+import { Task, RecurringInterval } from "@/types/task";
+import { CustomField } from "@/types/database";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { AssigneeSelect } from "./assignee-select";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { useState } from "react";
+import { formatDistanceToNow } from "date-fns";
 
 interface TaskDetailsProps {
   task: Task;
@@ -45,13 +41,9 @@ const STATUS_VARIANTS = {
   done: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
 };
 
-export function TaskDetails({
-  task,
-  isOpen,
-  onClose,
-  onUpdate,
-}: TaskDetailsProps) {
-  const { teamMembers } = useTeamMembers();
+export function TaskDetails({ task, isOpen, onClose, onUpdate }: TaskDetailsProps) {
+  const { data: teamMembersData } = useTeamMembers();
+  const teamMembers = teamMembersData || [];
   const [isEditing, setIsEditing] = useState(false);
   const [editingTask, setEditingTask] = useState<{
     title: string;

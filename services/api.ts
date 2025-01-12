@@ -31,6 +31,7 @@ interface RawProjectWithTaskCount {
   due_date: string | null;
   slug: string;
   team_id: string;
+  has_board_enabled: boolean;
   tasks: { count: number }[];
 }
 
@@ -49,6 +50,7 @@ export const projectsApi = {
           due_date,
           slug,
           team_id,
+          has_board_enabled,
           tasks:tasks(count)
         `)
         .eq("team_id", teamId)
@@ -87,6 +89,7 @@ export const projectsApi = {
           team_id,
           created_by: (await supabase.auth.getUser()).data.user?.id,
           status: data.status || "Planning",
+          has_board_enabled: false,
         })
         .select()
         .single();

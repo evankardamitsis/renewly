@@ -53,7 +53,7 @@ export function ActiveProjectsCard() {
                   days left
                 </p>
               </div>
-              <Badge variant="secondary">{project.tasks_count} tasks</Badge>
+              <Badge variant="secondary">{project.taskCount || 0} tasks</Badge>
             </div>
           ))}
           {projects.length === 0 && (

@@ -223,7 +223,7 @@ export function AllNotifications() {
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="absolute right-2 bottom-2 opacity-0 group-hover:opacity-100 transition-opacity"
                                     onClick={(e) => handleDeleteNotification(e, notification)}
                                 >
                                     Delete

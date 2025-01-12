@@ -1,39 +1,25 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, User, Trash, MessageSquare, Calendar } from "lucide-react";
-import { TaskDrawer } from "./task-drawer";
-import { AssigneeSelect } from "./assignee-select";
-import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { createClient } from "@/lib/supabase/client";
+import { Trash, RefreshCw } from "lucide-react";
 import { Database } from "@/types/database";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { AssigneeSelect } from "./assignee-select";
+import { TaskDrawer } from "./task-drawer";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { createClient } from "@/lib/supabase/client";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { useQueryClient } from "@tanstack/react-query";
+import { addDays, addMonths, addWeeks, addYears, isWithinInterval, subDays } from "date-fns";
 
 interface TaskTableProps {
   tasks: Database["public"]["Tables"]["tasks"]["Row"][];
+  onTaskDelete: (taskId: string) => void;
   onTaskUpdate: () => void;
-  onTaskClick?: (task: Database["public"]["Tables"]["tasks"]["Row"]) => void;
-  onTaskDelete?: (taskId: string) => Promise<void>;
 }
 
 const PRIORITY_VARIANTS = {
@@ -48,7 +34,33 @@ const STATUS_VARIANTS = {
   done: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
 } as const;
 
-export function TaskTable({ tasks = [], onTaskUpdate, onTaskClick, onTaskDelete }: TaskTableProps) {
+const getNextDueDate = (currentDueDate: string, interval: string) => {
+  const date = new Date(currentDueDate);
+  switch (interval.toLowerCase()) {
+    case 'daily':
+      return addDays(date, 1);
+    case 'weekly':
+      return addWeeks(date, 1);
+    case 'monthly':
+      return addMonths(date, 1);
+    case 'annual':
+      return addYears(date, 1);
+    default:
+      return date;
+  }
+};
+
+const isNearDueDate = (dueDate: string | null) => {
+  if (!dueDate) return false;
+  const date = new Date(dueDate);
+  const now = new Date();
+  return isWithinInterval(now, {
+    start: subDays(date, 7), // 7 days before due date
+    end: date
+  });
+};
+
+export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps) {
   const { teamMembers } = useTeamMembers();
   const [editingAssignee, setEditingAssignee] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Database["public"]["Tables"]["tasks"]["Row"] | null>(null);
@@ -56,6 +68,17 @@ export function TaskTable({ tasks = [], onTaskUpdate, onTaskClick, onTaskDelete 
   const [isDeleting, setIsDeleting] = useState(false);
   const supabase = useMemo(() => createClient(), []);
   const queryClient = useQueryClient();
+
+  // Get unique custom field labels across all tasks
+  const customFieldLabels = Array.from(
+    new Set(
+      tasks.flatMap((task) =>
+        Array.isArray(task.custom_fields)
+          ? task.custom_fields.map((field) => field.label)
+          : []
+      ).filter(Boolean)
+    )
+  );
 
   useEffect(() => {
     // Subscribe to task updates
@@ -83,32 +106,11 @@ export function TaskTable({ tasks = [], onTaskUpdate, onTaskClick, onTaskDelete 
 
   const handleTaskClick = (task: Database["public"]["Tables"]["tasks"]["Row"]) => {
     setSelectedTask(task);
-    if (onTaskClick) {
-      onTaskClick(task);
-    }
   };
 
-  const handleClose = () => {
+  const handleCloseDrawer = () => {
     setSelectedTask(null);
-  };
-
-  const handleDeleteClick = (taskId: string) => {
-    setTaskToDelete(taskId);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!taskToDelete || !onTaskDelete) return;
-    try {
-      setIsDeleting(true);
-      await onTaskDelete(taskToDelete);
-    } finally {
-      setIsDeleting(false);
-      setTaskToDelete(null);
-    }
-  };
-
-  const handleAssigneeClick = (taskId: string) => {
-    setEditingAssignee(taskId);
+    onTaskUpdate();
   };
 
   const handleAssigneeSelect = async (taskId: string, userId: string | null) => {
@@ -137,8 +139,7 @@ export function TaskTable({ tasks = [], onTaskUpdate, onTaskClick, onTaskDelete 
           });
       }
 
-      // Manually invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['teamMembers'] });
+      // Update local state immediately
       onTaskUpdate();
       setEditingAssignee(null);
     } catch (error) {
@@ -147,24 +148,32 @@ export function TaskTable({ tasks = [], onTaskUpdate, onTaskClick, onTaskDelete 
     }
   };
 
-  // Get unique custom field labels across all tasks
-  const customFieldLabels = Array.from(
-    new Set(
-      tasks.flatMap((task) => task.custom_fields?.map((field) => field.label) || []).filter(Boolean)
-    )
-  );
+  const handleRenewTask = async (task: Database["public"]["Tables"]["tasks"]["Row"]) => {
+    if (!task.due_date || !task.recurring_interval) return;
 
-  if (!tasks?.length) {
-    return (
-      <div className="text-center py-6 text-muted-foreground">
-        No tasks found
-      </div>
-    );
-  }
+    try {
+      const nextDueDate = getNextDueDate(task.due_date, task.recurring_interval);
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          due_date: nextDueDate.toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', task.id);
+
+      if (error) throw error;
+
+      toast.success("Task renewed successfully");
+      onTaskUpdate();
+    } catch (error) {
+      console.error('Error renewing task:', error);
+      toast.error("Failed to renew task");
+    }
+  };
 
   return (
     <>
-      <div className="border rounded-lg">
+      <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -182,141 +191,135 @@ export function TaskTable({ tasks = [], onTaskUpdate, onTaskClick, onTaskDelete 
             </TableRow>
           </TableHeader>
           <TableBody>
-            {tasks.map((task) => {
-              const assignee = teamMembers.find((m) => m.id === task.assigned_to);
-              return (
-                <TableRow key={task.id}>
-                  <TableCell
-                    className="font-medium cursor-pointer"
-                    onClick={() => handleTaskClick(task)}
-                  >
-                    {task.title}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="secondary"
-                      className={PRIORITY_VARIANTS[task.priority]}
-                    >
-                      {task.priority}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="secondary"
-                      className={STATUS_VARIANTS[task.status]}
-                    >
-                      {task.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {task.due_date ? (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Calendar className="h-4 w-4" />
-                        {format(new Date(task.due_date), "MMM d, yyyy")}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {task.is_recurring ? (
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">
-                          {task.recurring_interval}
-                        </Badge>
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  {customFieldLabels.map((label) => (
-                    <TableCell key={label}>
-                      {task.custom_fields?.find((f) => f.label === label)?.value || "-"}
-                    </TableCell>
-                  ))}
-                  <TableCell
-                    className="cursor-pointer hover:bg-accent/50 rounded-md"
-                    onClick={() => handleAssigneeClick(task.id)}
-                  >
-                    {editingAssignee === task.id ? (
-                      <AssigneeSelect
-                        teamMembers={teamMembers}
-                        selectedAssigneeId={task.assigned_to}
-                        onAssigneeSelect={(assigneeId) => handleAssigneeSelect(task.id, assigneeId)}
-                      />
-                    ) : assignee ? (
-                      <div className="flex items-center gap-2">
-                        <Avatar className="h-6 w-6">
-                          <AvatarImage src={assignee.image} />
-                          <AvatarFallback>
-                            {assignee.name[0].toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="text-sm">{assignee.name}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <User className="h-4 w-4" />
-                        <span>Unassigned</span>
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {task.comments ? (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <MessageSquare className="h-4 w-4" />
-                        {task.comments}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
+            {tasks.map((task) => (
+              <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleTaskClick(task)}>
+                <TableCell>{task.title}</TableCell>
+                <TableCell>
+                  <Badge variant="secondary" className={PRIORITY_VARIANTS[task.priority.toLowerCase() as keyof typeof PRIORITY_VARIANTS]}>
+                    {task.priority}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="secondary" className={STATUS_VARIANTS[task.status.toLowerCase() as keyof typeof STATUS_VARIANTS]}>
+                    {task.status}
+                  </Badge>
+                </TableCell>
+                <TableCell>{task.due_date ? new Date(task.due_date).toLocaleDateString() : "Not set"}</TableCell>
+                <TableCell>
+                  {task.is_recurring ? (
+                    <div className="flex items-center gap-2">
+                      <span>{task.recurring_interval}</span>
+                      {task.is_recurring && isNearDueDate(task.due_date) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRenewTask(task);
+                          }}
+                          className="h-6 w-6"
+                          title="Renew task"
+                        >
+                          <RefreshCw className="h-4 w-4" />
                         </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => handleTaskClick(task)}
-                          className="cursor-pointer"
-                        >
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => handleDeleteClick(task.id)}
-                          className="text-destructive cursor-pointer"
-                        >
-                          <Trash className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                      )}
+                    </div>
+                  ) : (
+                    "No"
+                  )}
+                </TableCell>
+                {customFieldLabels.map((label) => (
+                  <TableCell key={label}>
+                    {Array.isArray(task.custom_fields)
+                      ? task.custom_fields.find((f) => f.label === label)?.value || "-"
+                      : "-"
+                    }
                   </TableCell>
-                </TableRow>
-              );
-            })}
+                ))}
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  {editingAssignee === task.id ? (
+                    <AssigneeSelect
+                      teamMembers={teamMembers}
+                      selectedAssigneeId={task.assigned_to}
+                      onAssigneeSelect={(userId) => handleAssigneeSelect(task.id, userId)}
+                    />
+                  ) : (
+                    <div
+                      className="flex items-center gap-2 hover:bg-accent rounded-md p-1 cursor-pointer"
+                      onClick={() => setEditingAssignee(task.id)}
+                    >
+                      {task.assigned_to ? (
+                        <>
+                          {teamMembers.find((m) => m.id === task.assigned_to) ? (
+                            <>
+                              <Avatar className="h-6 w-6">
+                                <AvatarImage
+                                  src={teamMembers.find((m) => m.id === task.assigned_to)?.image}
+                                  alt={teamMembers.find((m) => m.id === task.assigned_to)?.name || ""}
+                                />
+                                <AvatarFallback>
+                                  {teamMembers
+                                    .find((m) => m.id === task.assigned_to)
+                                    ?.name?.charAt(0) || "?"}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-sm">
+                                {teamMembers.find((m) => m.id === task.assigned_to)?.name}
+                              </span>
+                            </>
+                          ) : (
+                            "Unknown"
+                          )}
+                        </>
+                      ) : (
+                        "Unassigned"
+                      )}
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {Array.isArray(task.comments) && task.comments.length > 0 ? (
+                    <Badge variant="outline">{task.comments.length}</Badge>
+                  ) : (
+                    "None"
+                  )}
+                </TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onTaskDelete(task.id)}
+                  >
+                    <Trash className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </div>
 
       {selectedTask && (
         <TaskDrawer
-          task={selectedTask}
           isOpen={!!selectedTask}
-          onClose={handleClose}
-          onUpdate={onTaskClick}
-          onDelete={onTaskDelete}
-          loading={false}
+          onClose={handleCloseDrawer}
+          task={selectedTask}
         />
       )}
 
       <ConfirmationModal
         open={!!taskToDelete}
         onOpenChange={(open) => !open && setTaskToDelete(null)}
-        onConfirm={handleConfirmDelete}
+        onConfirm={async () => {
+          if (!taskToDelete) return;
+          try {
+            setIsDeleting(true);
+            await onTaskDelete(taskToDelete);
+          } finally {
+            setIsDeleting(false);
+            setTaskToDelete(null);
+          }
+        }}
         title="Delete Task"
         description="Are you sure you want to delete this task? This action cannot be undone."
         loading={isDeleting}

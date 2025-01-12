@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { useQueryClient } from "@tanstack/react-query";
-import { addDays, addMonths, addWeeks, addYears, isWithinInterval, subDays, format } from "date-fns";
+import { addDays, addMonths, addWeeks, addYears, isWithinInterval, subDays, format, formatDistanceToNow } from "date-fns";
 import { TaskDetails } from "./task-details";
 
 interface TaskTableProps {
@@ -34,21 +34,33 @@ const STATUS_VARIANTS = {
   done: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
 };
 
-const getNextDueDate = (currentDueDate: string, interval: string) => {
+function getNextDueDate(currentDueDate: string, recurringInterval: string): string {
   const date = new Date(currentDueDate);
-  switch (interval.toLowerCase()) {
-    case 'daily':
-      return addDays(date, 1);
-    case 'weekly':
-      return addWeeks(date, 1);
-    case 'monthly':
-      return addMonths(date, 1);
-    case 'annual':
-      return addYears(date, 1);
+
+  // Parse the interval into number and unit
+  const match = recurringInterval.match(/^(\d+)?([a-zA-Z]+)$/);
+  if (!match) return date.toISOString();
+
+  const [, count = "1", unit] = match;
+  const amount = parseInt(count, 10);
+
+  switch (unit) {
+    case "day":
+    case "days":
+      return addDays(date, amount).toISOString();
+    case "week":
+    case "weeks":
+      return addWeeks(date, amount).toISOString();
+    case "month":
+    case "months":
+      return addMonths(date, amount).toISOString();
+    case "year":
+    case "years":
+      return addYears(date, amount).toISOString();
     default:
-      return date;
+      return date.toISOString();
   }
-};
+}
 
 const isNearDueDate = (dueDate: string | null) => {
   if (!dueDate) return false;
@@ -140,14 +152,16 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps)
   };
 
   const handleRenewTask = async (task: Database["public"]["Tables"]["tasks"]["Row"]) => {
-    if (!task.due_date || !task.recurring_interval) return;
+    if (!task.is_recurring || !task.recurring_interval || !task.due_date) return;
 
     try {
+      const supabase = createClient();
       const nextDueDate = getNextDueDate(task.due_date, task.recurring_interval);
+
       const { error } = await supabase
         .from('tasks')
         .update({
-          due_date: nextDueDate.toISOString(),
+          due_date: nextDueDate,
           updated_at: new Date().toISOString()
         })
         .eq('id', task.id);
@@ -155,7 +169,20 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps)
       if (error) throw error;
 
       toast.success("Task renewed successfully");
-      onTaskUpdate();
+      if (onTaskUpdate) {
+        onTaskUpdate();
+      }
+
+      // Create notification for assigned user
+      if (task.assigned_to) {
+        await supabase.from('notifications').insert({
+          user_id: task.assigned_to,
+          type: 'task_renewed',
+          title: 'Task Renewed',
+          description: `Task "${task.title}" has been renewed and is now due ${formatDistanceToNow(new Date(nextDueDate), { addSuffix: true })}`,
+          task_id: task.id
+        });
+      }
     } catch (error) {
       console.error('Error renewing task:', error);
       toast.error("Failed to renew task");

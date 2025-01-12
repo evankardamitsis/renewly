@@ -132,7 +132,7 @@ export function PowerNav() {
                     <TooltipTrigger asChild>
                         <motion.button
                             className={cn(
-                                "relative flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-colors",
+                                "relative flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-colors hover:shadow-xl",
                                 isOpen && "bg-red-500"
                             )}
                             onClick={() => setIsOpen(!isOpen)}
@@ -141,7 +141,7 @@ export function PowerNav() {
                             initial={false}
                             animate={{
                                 rotate: isOpen ? 360 : 0,
-                                backgroundColor: isOpen ? "rgb(239, 68, 68)" : "",
+                                backgroundColor: isOpen ? "rgb(239, 68, 68)" : "rgb(147, 51, 234)",
                             }}
                             transition={{ duration: 0.3 }}
                         >

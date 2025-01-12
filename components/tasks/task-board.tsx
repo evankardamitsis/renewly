@@ -9,12 +9,11 @@ import {
 import { Task } from "@/types/database";
 import { TaskCard } from "./task-card";
 import { useState } from "react";
-import { TaskDrawer } from "./task-drawer";
+import { TaskDetails } from "./task-details";
 
 interface TaskBoardProps {
   tasks: Task[];
   onTaskClick?: (task: Task) => void;
-  onTaskDelete?: (taskId: string) => Promise<void>;
 }
 
 const COLUMNS: { id: Task["status"]; title: string }[] = [
@@ -26,7 +25,6 @@ const COLUMNS: { id: Task["status"]; title: string }[] = [
 export function TaskBoard({
   tasks = [],
   onTaskClick,
-  onTaskDelete,
 }: TaskBoardProps) {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
@@ -59,6 +57,13 @@ export function TaskBoard({
 
   const getTasksByStatus = (status: Task["status"]) => {
     return tasks?.filter((task) => task.status === status) ?? [];
+  };
+
+  const handleTaskUpdate = (task: Task) => {
+    if (onTaskClick) {
+      onTaskClick(task);
+      setSelectedTask(null);
+    }
   };
 
   return (
@@ -110,13 +115,11 @@ export function TaskBoard({
       </DragDropContext>
 
       {selectedTask && (
-        <TaskDrawer
+        <TaskDetails
           task={selectedTask}
           isOpen={!!selectedTask}
           onClose={handleClose}
-          onUpdate={onTaskClick}
-          onDelete={onTaskDelete}
-          loading={false}
+          onUpdate={handleTaskUpdate}
         />
       )}
     </>

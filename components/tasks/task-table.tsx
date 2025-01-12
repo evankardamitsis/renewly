@@ -9,12 +9,12 @@ import { Trash, RefreshCw } from "lucide-react";
 import { Database } from "@/types/database";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { AssigneeSelect } from "./assignee-select";
-import { TaskDrawer } from "./task-drawer";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { useQueryClient } from "@tanstack/react-query";
-import { addDays, addMonths, addWeeks, addYears, isWithinInterval, subDays } from "date-fns";
+import { addDays, addMonths, addWeeks, addYears, isWithinInterval, subDays, format } from "date-fns";
+import { TaskDetails } from "./task-details";
 
 interface TaskTableProps {
   tasks: Database["public"]["Tables"]["tasks"]["Row"][];
@@ -25,14 +25,14 @@ interface TaskTableProps {
 const PRIORITY_VARIANTS = {
   low: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
   medium: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
-  high: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
-} as const;
+  high: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
+};
 
 const STATUS_VARIANTS = {
-  todo: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
+  todo: "bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-300",
   "in-progress": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-  done: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-} as const;
+  done: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
+};
 
 const getNextDueDate = (currentDueDate: string, interval: string) => {
   const date = new Date(currentDueDate);
@@ -63,9 +63,9 @@ const isNearDueDate = (dueDate: string | null) => {
 export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps) {
   const { teamMembers } = useTeamMembers();
   const [editingAssignee, setEditingAssignee] = useState<string | null>(null);
-  const [selectedTask, setSelectedTask] = useState<Database["public"]["Tables"]["tasks"]["Row"] | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Database["public"]["Tables"]["tasks"]["Row"] | null>(null);
   const supabase = useMemo(() => createClient(), []);
   const queryClient = useQueryClient();
 
@@ -103,15 +103,6 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps)
       void supabase.removeChannel(channel);
     }
   }, [onTaskUpdate, supabase, queryClient]);
-
-  const handleTaskClick = (task: Database["public"]["Tables"]["tasks"]["Row"]) => {
-    setSelectedTask(task);
-  };
-
-  const handleCloseDrawer = () => {
-    setSelectedTask(null);
-    onTaskUpdate();
-  };
 
   const handleAssigneeSelect = async (taskId: string, userId: string | null) => {
     try {
@@ -192,7 +183,11 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps)
           </TableHeader>
           <TableBody>
             {tasks.map((task) => (
-              <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleTaskClick(task)}>
+              <TableRow
+                key={task.id}
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => setSelectedTask(task)}
+              >
                 <TableCell>{task.title}</TableCell>
                 <TableCell>
                   <Badge variant="secondary" className={PRIORITY_VARIANTS[task.priority.toLowerCase() as keyof typeof PRIORITY_VARIANTS]}>
@@ -204,7 +199,7 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps)
                     {task.status}
                   </Badge>
                 </TableCell>
-                <TableCell>{task.due_date ? new Date(task.due_date).toLocaleDateString() : "Not set"}</TableCell>
+                <TableCell>{task.due_date ? format(new Date(task.due_date), 'MMM d, yyyy') : "Not set"}</TableCell>
                 <TableCell>
                   {task.is_recurring ? (
                     <div className="flex items-center gap-2">
@@ -245,50 +240,37 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps)
                     />
                   ) : (
                     <div
-                      className="flex items-center gap-2 hover:bg-accent rounded-md p-1 cursor-pointer"
+                      className="flex items-center gap-2 cursor-pointer hover:bg-accent rounded-md p-1"
                       onClick={() => setEditingAssignee(task.id)}
                     >
                       {task.assigned_to ? (
                         <>
-                          {teamMembers.find((m) => m.id === task.assigned_to) ? (
-                            <>
-                              <Avatar className="h-6 w-6">
-                                <AvatarImage
-                                  src={teamMembers.find((m) => m.id === task.assigned_to)?.image}
-                                  alt={teamMembers.find((m) => m.id === task.assigned_to)?.name || ""}
-                                />
-                                <AvatarFallback>
-                                  {teamMembers
-                                    .find((m) => m.id === task.assigned_to)
-                                    ?.name?.charAt(0) || "?"}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="text-sm">
-                                {teamMembers.find((m) => m.id === task.assigned_to)?.name}
-                              </span>
-                            </>
-                          ) : (
-                            "Unknown"
-                          )}
+                          <Avatar className="h-6 w-6">
+                            <AvatarImage
+                              src={teamMembers.find((m) => m.id === task.assigned_to)?.image}
+                              alt={teamMembers.find((m) => m.id === task.assigned_to)?.name}
+                            />
+                            <AvatarFallback>
+                              {teamMembers.find((m) => m.id === task.assigned_to)?.name?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{teamMembers.find((m) => m.id === task.assigned_to)?.name}</span>
                         </>
                       ) : (
-                        "Unassigned"
+                        <span className="text-muted-foreground">Unassigned</span>
                       )}
                     </div>
                   )}
                 </TableCell>
+                <TableCell>{Array.isArray(task.comments) ? task.comments.length : 0}</TableCell>
                 <TableCell>
-                  {Array.isArray(task.comments) && task.comments.length > 0 ? (
-                    <Badge variant="outline">{task.comments.length}</Badge>
-                  ) : (
-                    "None"
-                  )}
-                </TableCell>
-                <TableCell onClick={(e) => e.stopPropagation()}>
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => onTaskDelete(task.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTaskToDelete(task.id);
+                    }}
                   >
                     <Trash className="h-4 w-4" />
                   </Button>
@@ -300,10 +282,11 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps)
       </div>
 
       {selectedTask && (
-        <TaskDrawer
-          isOpen={!!selectedTask}
-          onClose={handleCloseDrawer}
+        <TaskDetails
           task={selectedTask}
+          isOpen={!!selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onUpdate={onTaskUpdate}
         />
       )}
 
@@ -312,12 +295,15 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps)
         onOpenChange={(open) => !open && setTaskToDelete(null)}
         onConfirm={async () => {
           if (!taskToDelete) return;
+          setIsDeleting(true);
           try {
-            setIsDeleting(true);
             await onTaskDelete(taskToDelete);
+            toast.success("Task deleted successfully");
+            setTaskToDelete(null);
+          } catch (error) {
+            toast.error("Failed to delete task");
           } finally {
             setIsDeleting(false);
-            setTaskToDelete(null);
           }
         }}
         title="Delete Task"

@@ -23,6 +23,8 @@ import { LoadingSpinner } from "../ui/loading-spinner";
 import { Plus, X } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { CreateTaskData } from "@/hooks/useTaskActions";
+import { AssigneeSelect } from "./assignee-select";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -56,24 +58,56 @@ export function TaskModal({
   );
   const [status, setStatus] = useState<Task["status"]>(task?.status || "todo");
   const [dueDate, setDueDate] = useState(task?.due_date || "");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
   const [isRecurring, setIsRecurring] = useState(task?.is_recurring || false);
   const [recurringInterval, setRecurringInterval] = useState<RecurringInterval>(
     (task?.recurring_interval as RecurringInterval) || "monthly"
   );
   const [customFields, setCustomFields] = useState<CustomField[]>(
-    (task?.custom_fields as CustomField[]) || []
+    task?.custom_fields || []
   );
+  const [assignedTo, setAssignedTo] = useState<string | null>(task?.assigned_to || null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { teamMembers } = useTeamMembers();
 
   useEffect(() => {
-    setTitle(task?.title || "");
-    setDescription(task?.description || "");
-    setPriority(task?.priority || "medium");
-    setStatus(task?.status || "todo");
-    setDueDate(task?.due_date || "");
-    setError("");
-  }, [task, isOpen]);
+    if (task) {
+      setTitle(task.title);
+      setDescription(task.description || "");
+      setPriority(task.priority);
+      setStatus(task.status);
+      setDueDate(task.due_date || "");
+      setIsRecurring(task.is_recurring || false);
+      setRecurringInterval(
+        (task.recurring_interval as RecurringInterval) || "monthly"
+      );
+      setCustomFields(task.custom_fields || []);
+      setAssignedTo(task.assigned_to || null);
+    }
+  }, [task]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projectId) return;
+
+    setIsSubmitting(true);
+    try {
+      await onSave({
+        title,
+        description,
+        priority,
+        status,
+        due_date: dueDate || null,
+        is_recurring: isRecurring,
+        recurring_interval: isRecurring ? recurringInterval : null,
+        custom_fields: customFields,
+        assigned_to: assignedTo,
+        project_id: projectId,
+      });
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleAddCustomField = () => {
     setCustomFields([
@@ -96,76 +130,40 @@ export function TaskModal({
     setCustomFields(newFields);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!title.trim()) {
-      setError("Title is required");
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      setError("");
-      await onSave({
-        title: title.trim(),
-        description: description.trim(),
-        priority,
-        status,
-        due_date: dueDate || null,
-        project_id: projectId,
-        is_recurring: isRecurring,
-        recurring_interval: isRecurring ? recurringInterval : null,
-        custom_fields: customFields || [],
-      });
-      onClose();
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Failed to save task");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{task ? "Edit Task" : "Create New Task"}</DialogTitle>
+          <DialogTitle>{task ? "Edit Task" : "Create Task"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <label htmlFor="title">Title</label>
-              <Input
-                id="title"
-                value={title}
-                onChange={(e) => {
-                  setTitle(e.target.value);
-                  setError("");
-                }}
-                className={error ? "border-destructive" : ""}
-                disabled={isSubmitting}
-              />
-              {error && <p className="text-sm text-destructive">{error}</p>}
-            </div>
-            <div className="grid gap-2">
-              <label htmlFor="description">Description</label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                disabled={isSubmitting}
-              />
-            </div>
-            <div className="grid gap-2">
-              <label htmlFor="priority">Priority</label>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Title</label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              disabled={loading}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Description</label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              disabled={loading}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Priority</label>
               <Select
                 value={priority}
                 onValueChange={(value: Task["priority"]) => setPriority(value)}
-                disabled={isSubmitting}
+                disabled={loading}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select priority" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="low">Low</SelectItem>
@@ -174,15 +172,15 @@ export function TaskModal({
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <label htmlFor="status">Status</label>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Status</label>
               <Select
                 value={status}
                 onValueChange={(value: Task["status"]) => setStatus(value)}
-                disabled={isSubmitting}
+                disabled={loading}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todo">To Do</SelectItem>
@@ -191,99 +189,79 @@ export function TaskModal({
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <label htmlFor="dueDate">Due Date</label>
-              <Input
-                id="dueDate"
-                type="datetime-local"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                disabled={isSubmitting}
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Due Date</label>
+            <Input
+              type="datetime-local"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              disabled={loading}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Assignee</label>
+            <AssigneeSelect
+              teamMembers={teamMembers}
+              selectedAssigneeId={assignedTo}
+              onAssigneeSelect={setAssignedTo}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Recurring Task</label>
+            <div className="flex items-center gap-4">
+              <Switch
+                checked={isRecurring}
+                onCheckedChange={setIsRecurring}
+                disabled={loading}
               />
-            </div>
-            <div className="grid gap-2">
-              <label className="text-sm font-medium">Recurring Task</label>
-              <div className="flex items-center gap-4">
-                <Switch
-                  checked={isRecurring}
-                  onCheckedChange={setIsRecurring}
-                  disabled={loading}
-                />
-                {isRecurring && (
-                  <Select
-                    value={recurringInterval}
-                    onValueChange={(value: RecurringInterval) =>
-                      setRecurringInterval(value)
-                    }
-                    disabled={loading}
-                  >
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Select interval" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="annual">Annual</SelectItem>
-                      <SelectItem value="6month">Every 6 Months</SelectItem>
-                      <SelectItem value="3month">Every 3 Months</SelectItem>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Custom Fields</label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddCustomField}
+              {isRecurring && (
+                <Select
+                  value={recurringInterval}
+                  onValueChange={(value: RecurringInterval) =>
+                    setRecurringInterval(value)
+                  }
                   disabled={loading}
                 >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Field
-                </Button>
-              </div>
-
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="annual">Annual</SelectItem>
+                    <SelectItem value="6month">Every 6 Months</SelectItem>
+                    <SelectItem value="3month">Every 3 Months</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">Custom Fields</label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddCustomField}
+                disabled={loading}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Field
+              </Button>
+            </div>
+            <div className="space-y-4">
               {customFields.map((field, index) => (
-                <div key={index} className="flex gap-2 items-start">
+                <div key={index} className="flex items-start gap-2">
                   <div className="flex-1 space-y-2">
                     <Input
-                      placeholder="Label"
                       value={field.label}
                       onChange={(e) =>
                         handleCustomFieldChange(index, "label", e.target.value)
                       }
+                      placeholder="Label"
                       disabled={loading}
                     />
-                    {field.type === "text" ? (
-                      <Textarea
-                        placeholder="Value"
-                        value={field.value}
-                        onChange={(e) =>
-                          handleCustomFieldChange(
-                            index,
-                            "value",
-                            e.target.value
-                          )
-                        }
-                        disabled={loading}
-                      />
-                    ) : (
-                      <Input
-                        placeholder="Value"
-                        value={field.value}
-                        onChange={(e) =>
-                          handleCustomFieldChange(
-                            index,
-                            "value",
-                            e.target.value
-                          )
-                        }
-                        disabled={loading}
-                      />
-                    )}
                     <Select
                       value={field.type}
                       onValueChange={(value) =>
@@ -299,6 +277,25 @@ export function TaskModal({
                         <SelectItem value="text">Long Text</SelectItem>
                       </SelectContent>
                     </Select>
+                    {field.type === "text" ? (
+                      <Textarea
+                        value={field.value}
+                        onChange={(e) =>
+                          handleCustomFieldChange(index, "value", e.target.value)
+                        }
+                        placeholder="Value"
+                        disabled={loading}
+                      />
+                    ) : (
+                      <Input
+                        value={field.value}
+                        onChange={(e) =>
+                          handleCustomFieldChange(index, "value", e.target.value)
+                        }
+                        placeholder="Value"
+                        disabled={loading}
+                      />
+                    )}
                   </div>
                   <Button
                     type="button"

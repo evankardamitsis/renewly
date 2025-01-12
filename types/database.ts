@@ -8,6 +8,13 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+export interface Assignee {
+  id: string;
+  name: string;
+  email: string;
+  image?: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -21,6 +28,7 @@ export interface Database {
           role: string | null;
           has_completed_onboarding: boolean;
           current_team_id: string | null;
+          avatar_url: string | null;
         };
         Insert: {
           id: string;
@@ -31,6 +39,7 @@ export interface Database {
           role?: string | null;
           has_completed_onboarding?: boolean;
           current_team_id?: string | null;
+          avatar_url?: string | null;
         };
         Update: {
           id?: string;
@@ -41,6 +50,7 @@ export interface Database {
           role?: string | null;
           has_completed_onboarding?: boolean;
           current_team_id?: string | null;
+          avatar_url?: string | null;
         };
       };
       projects: {
@@ -89,7 +99,7 @@ export interface Database {
           description: string;
           priority: "low" | "medium" | "high";
           due_date: string | null;
-          assignees: Json[];
+          assigned_to: string | null;
           comments: number;
           progress: number;
           status: "todo" | "in-progress" | "done";
@@ -98,6 +108,7 @@ export interface Database {
           recurring_interval: RecurringInterval | null;
           created_at: string;
           updated_at: string;
+          created_by: string | null;
         };
         Insert: {
           id?: string;
@@ -106,7 +117,7 @@ export interface Database {
           description?: string;
           priority?: "low" | "medium" | "high";
           due_date?: string | null;
-          assignees?: Json[];
+          assigned_to?: string | null;
           comments?: number;
           progress?: number;
           status?: "todo" | "in-progress" | "done";
@@ -115,6 +126,7 @@ export interface Database {
           recurring_interval?: RecurringInterval | null;
           created_at?: string;
           updated_at?: string;
+          created_by?: string | null;
         };
         Update: {
           id?: string;
@@ -123,7 +135,7 @@ export interface Database {
           description?: string;
           priority?: "low" | "medium" | "high";
           due_date?: string | null;
-          assignees?: Json[];
+          assigned_to?: string | null;
           comments?: number;
           progress?: number;
           status?: "todo" | "in-progress" | "done";
@@ -132,6 +144,7 @@ export interface Database {
           recurring_interval?: RecurringInterval | null;
           created_at?: string;
           updated_at?: string;
+          created_by?: string | null;
         };
       };
       teams: {

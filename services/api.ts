@@ -155,6 +155,7 @@ export const tasksApi = {
             recurring_interval: data.is_recurring
               ? data.recurring_interval
               : null,
+            assigned_to: data.assigned_to || null,
           },
         ])
         .select()
@@ -193,6 +194,7 @@ export const tasksApi = {
           recurring_interval: updates.is_recurring
             ? updates.recurring_interval
             : null,
+          assigned_to: updates.assigned_to || null,
         })
         .eq("id", taskId)
         .select()

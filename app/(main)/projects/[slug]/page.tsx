@@ -238,6 +238,7 @@ export default function ProjectPage() {
             tasks={filteredTasks}
             onTaskClick={handleTaskClick}
             onTaskDelete={handleTaskDelete}
+            onTaskUpdate={loadProjectTasks}
           />
         </TabsContent>
         <TabsContent value="board">

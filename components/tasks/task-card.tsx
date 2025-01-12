@@ -3,7 +3,9 @@
 import { Task } from "@/types/database";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { CalendarDays, MessageSquare, Users } from "lucide-react";
+import { CalendarDays, MessageSquare, User } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
 
 interface TaskCardProps {
   task: Task;
@@ -11,6 +13,9 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, onClick }: TaskCardProps) {
+  const { teamMembers } = useTeamMembers();
+  const assignee = teamMembers.find((m) => m.id === task.assigned_to);
+
   const priorityColors = {
     low: "bg-green-100 text-green-800",
     medium: "bg-yellow-100 text-yellow-800",
@@ -43,10 +48,18 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
             <span>{format(new Date(task.due_date), "MMM d")}</span>
           </div>
         )}
-        {task.assignees?.length > 0 && (
+        {assignee ? (
           <div className="flex items-center gap-1">
-            <Users className="h-4 w-4" />
-            <span>{task.assignees.length}</span>
+            <Avatar className="h-4 w-4">
+              <AvatarImage src={assignee.image} />
+              <AvatarFallback>{assignee.name[0].toUpperCase()}</AvatarFallback>
+            </Avatar>
+            <span>{assignee.name}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1">
+            <User className="h-4 w-4" />
+            <span>Unassigned</span>
           </div>
         )}
         {task.comments > 0 && (

@@ -1,65 +1,91 @@
 "use client";
 
-import { Task } from "@/types/database";
+import { useState, useEffect, useMemo } from "react";
 import {
   Table,
   TableBody,
+  TableCell,
   TableHead,
   TableHeader,
   TableRow,
-  TableCell,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
-import {
-  Users,
-  MessageSquare,
-  Calendar,
-  MoreVertical,
-  Trash,
-} from "lucide-react";
-import { useState } from "react";
-import { TaskDrawer } from "./task-drawer";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { MoreHorizontal, User, Trash, MessageSquare, Calendar } from "lucide-react";
+import { TaskDrawer } from "./task-drawer";
+import { AssigneeSelect } from "./assignee-select";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { createClient } from "@/lib/supabase/client";
+import { Database } from "@/types/database";
+import { toast } from "sonner";
+import { format } from "date-fns";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface TaskTableProps {
-  tasks: Task[];
-  onTaskClick?: (task: Task) => void;
+  tasks: Database["public"]["Tables"]["tasks"]["Row"][];
+  onTaskUpdate: () => void;
+  onTaskClick?: (task: Database["public"]["Tables"]["tasks"]["Row"]) => void;
   onTaskDelete?: (taskId: string) => Promise<void>;
 }
 
 const PRIORITY_VARIANTS = {
   low: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-  medium:
-    "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
+  medium: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
   high: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
 } as const;
 
 const STATUS_VARIANTS = {
   todo: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
-  "in-progress":
-    "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+  "in-progress": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
   done: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
 } as const;
 
-export function TaskTable({
-  tasks = [],
-  onTaskClick,
-  onTaskDelete,
-}: TaskTableProps) {
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+export function TaskTable({ tasks = [], onTaskUpdate, onTaskClick, onTaskDelete }: TaskTableProps) {
+  const { teamMembers } = useTeamMembers();
+  const [editingAssignee, setEditingAssignee] = useState<string | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Database["public"]["Tables"]["tasks"]["Row"] | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const supabase = useMemo(() => createClient(), []);
+  const queryClient = useQueryClient();
 
-  const handleTaskClick = (task: Task) => {
+  useEffect(() => {
+    // Subscribe to task updates
+    const channel = supabase
+      .channel('task_updates')
+      .on('postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'tasks'
+        },
+        () => {
+          // Refresh tasks when there's an update
+          onTaskUpdate();
+          // Also refresh team members to get latest assignee data
+          queryClient.invalidateQueries({ queryKey: ['teamMembers'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    }
+  }, [onTaskUpdate, supabase, queryClient]);
+
+  const handleTaskClick = (task: Database["public"]["Tables"]["tasks"]["Row"]) => {
     setSelectedTask(task);
+    if (onTaskClick) {
+      onTaskClick(task);
+    }
   };
 
   const handleClose = () => {
@@ -81,14 +107,50 @@ export function TaskTable({
     }
   };
 
+  const handleAssigneeClick = (taskId: string) => {
+    setEditingAssignee(taskId);
+  };
+
+  const handleAssigneeSelect = async (taskId: string, userId: string | null) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ assigned_to: userId })
+        .eq('id', taskId);
+
+      if (error) throw error;
+
+      // Show success toast
+      const assignee = userId ? teamMembers.find(m => m.id === userId)?.name : 'no one';
+      toast.success(`Task has been assigned to ${assignee}`);
+
+      // Create notification for the assigned user
+      if (userId) {
+        await supabase
+          .from('notifications')
+          .insert({
+            user_id: userId,
+            type: 'task_assigned',
+            title: 'New Task Assignment',
+            message: `You have been assigned a new task`,
+            task_id: taskId
+          });
+      }
+
+      // Manually invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['teamMembers'] });
+      onTaskUpdate();
+      setEditingAssignee(null);
+    } catch (error) {
+      console.error('Error updating task:', error);
+      toast.error("Failed to assign task. Please try again.");
+    }
+  };
+
   // Get unique custom field labels across all tasks
   const customFieldLabels = Array.from(
     new Set(
-      tasks
-        .flatMap(
-          (task) => task.custom_fields?.map((field) => field.label) || []
-        )
-        .filter(Boolean)
+      tasks.flatMap((task) => task.custom_fields?.map((field) => field.label) || []).filter(Boolean)
     )
   );
 
@@ -114,109 +176,128 @@ export function TaskTable({
               {customFieldLabels.map((label) => (
                 <TableHead key={label}>{label}</TableHead>
               ))}
-              <TableHead>Assignees</TableHead>
+              <TableHead>Assignee</TableHead>
               <TableHead>Comments</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {tasks.map((task) => (
-              <TableRow key={task.id}>
-                <TableCell
-                  className="font-medium cursor-pointer"
-                  onClick={() => handleTaskClick(task)}
-                >
-                  {task.title}
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant="secondary"
-                    className={PRIORITY_VARIANTS[task.priority]}
+            {tasks.map((task) => {
+              const assignee = teamMembers.find((m) => m.id === task.assigned_to);
+              return (
+                <TableRow key={task.id}>
+                  <TableCell
+                    className="font-medium cursor-pointer"
+                    onClick={() => handleTaskClick(task)}
                   >
-                    {task.priority}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant="secondary"
-                    className={STATUS_VARIANTS[task.status]}
-                  >
-                    {task.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {task.due_date ? (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
-                      {format(new Date(task.due_date), "MMM d, yyyy")}
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {task.is_recurring ? (
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary">
-                        {task.recurring_interval}
-                      </Badge>
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                </TableCell>
-                {customFieldLabels.map((label) => (
-                  <TableCell key={label}>
-                    {task.custom_fields?.find((f) => f.label === label)
-                      ?.value || "-"}
+                    {task.title}
                   </TableCell>
-                ))}
-                <TableCell>
-                  {task.assignees?.length ? (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Users className="h-4 w-4" />
-                      {task.assignees.length}
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {task.comments ? (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <MessageSquare className="h-4 w-4" />
-                      {task.comments}
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => handleTaskClick(task)}
-                        className="cursor-pointer"
-                      >
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleDeleteClick(task.id)}
-                        className="text-destructive cursor-pointer"
-                      >
-                        <Trash className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))}
+                  <TableCell>
+                    <Badge
+                      variant="secondary"
+                      className={PRIORITY_VARIANTS[task.priority]}
+                    >
+                      {task.priority}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="secondary"
+                      className={STATUS_VARIANTS[task.status]}
+                    >
+                      {task.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {task.due_date ? (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        {format(new Date(task.due_date), "MMM d, yyyy")}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {task.is_recurring ? (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">
+                          {task.recurring_interval}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  {customFieldLabels.map((label) => (
+                    <TableCell key={label}>
+                      {task.custom_fields?.find((f) => f.label === label)?.value || "-"}
+                    </TableCell>
+                  ))}
+                  <TableCell
+                    className="cursor-pointer hover:bg-accent/50 rounded-md"
+                    onClick={() => handleAssigneeClick(task.id)}
+                  >
+                    {editingAssignee === task.id ? (
+                      <AssigneeSelect
+                        teamMembers={teamMembers}
+                        selectedAssigneeId={task.assigned_to}
+                        onAssigneeSelect={(assigneeId) => handleAssigneeSelect(task.id, assigneeId)}
+                      />
+                    ) : assignee ? (
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage src={assignee.image} />
+                          <AvatarFallback>
+                            {assignee.name[0].toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm">{assignee.name}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <User className="h-4 w-4" />
+                        <span>Unassigned</span>
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {task.comments ? (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <MessageSquare className="h-4 w-4" />
+                        {task.comments}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => handleTaskClick(task)}
+                          className="cursor-pointer"
+                        >
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDeleteClick(task.id)}
+                          className="text-destructive cursor-pointer"
+                        >
+                          <Trash className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>

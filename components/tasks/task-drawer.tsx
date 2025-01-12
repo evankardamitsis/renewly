@@ -22,6 +22,8 @@ import { Trash, Plus, X } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { RecurringInterval } from "@/types/task";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
+import { AssigneeSelect } from "./assignee-select";
+import { useTeamMembers } from "../../hooks/useTeamMembers";
 
 interface TaskDrawerProps {
   task: Task;
@@ -54,7 +56,9 @@ export function TaskDrawer({
   const [customFields, setCustomFields] = useState<CustomField[]>(
     task.custom_fields || []
   );
+  const [assignedTo, setAssignedTo] = useState<string | null>(task.assigned_to);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const { teamMembers } = useTeamMembers();
 
   const handleSave = async () => {
     if (!onUpdate) return;
@@ -68,26 +72,20 @@ export function TaskDrawer({
       is_recurring: isRecurring,
       recurring_interval: isRecurring ? recurringInterval : null,
       custom_fields: customFields || [],
+      assigned_to: assignedTo,
     });
     setIsEditing(false);
   };
 
   const handleDeleteClick = () => {
-    console.log("Delete clicked, showing confirm modal");
     setShowDeleteConfirm(true);
   };
 
   const handleConfirmDelete = async () => {
-    console.log("Confirm delete clicked");
-    if (!onDelete) {
-      console.log("No onDelete function provided");
-      return;
-    }
+    if (!onDelete) return;
     try {
       setIsDeleting(true);
-      console.log("Deleting task:", task.id);
       await onDelete(task.id);
-      console.log("Task deleted successfully");
       onClose();
     } catch (error) {
       console.error("Failed to delete task:", error);
@@ -228,6 +226,20 @@ export function TaskDrawer({
               ) : (
                 <p className="text-sm">
                   {dueDate ? new Date(dueDate).toLocaleString() : "-"}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Assignee</label>
+              {isEditing ? (
+                <AssigneeSelect
+                  teamMembers={teamMembers}
+                  selectedAssigneeId={assignedTo}
+                  onAssigneeSelect={setAssignedTo}
+                />
+              ) : (
+                <p className="text-sm">
+                  {teamMembers.find((m) => m.id === assignedTo)?.name || "-"}
                 </p>
               )}
             </div>

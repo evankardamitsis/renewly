@@ -67,7 +67,7 @@ export function TaskModal({
   );
   const [assignedTo, setAssignedTo] = useState<string | null>(task?.assigned_to || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { teamMembers } = useTeamMembers();
+  const { teamMembers, isLoading: isLoadingTeamMembers } = useTeamMembers();
 
   useEffect(() => {
     if (task) {
@@ -311,8 +311,14 @@ export function TaskModal({
             </div>
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={loading || isSubmitting}>
-              {loading ? <LoadingSpinner /> : task ? "Update" : "Create"}
+            <Button
+              type="submit"
+              disabled={loading || isSubmitting || isLoadingTeamMembers}
+            >
+              {isSubmitting ? (
+                <LoadingSpinner className="h-4 w-4 mr-2" noContainer />
+              ) : null}
+              {task ? "Save Changes" : "Create Task"}
             </Button>
           </DialogFooter>
         </form>

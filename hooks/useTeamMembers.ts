@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { useProfile } from "./useProfile";
 
 export interface TeamMember {
     id: string;
@@ -12,20 +13,19 @@ export interface TeamMember {
     is_super_admin: boolean;
 }
 
-interface UserContextData {
-    currentTeamId: string;
-}
-
 export function useTeamMembers() {
-    const userContext = useQuery<UserContextData>({
-        queryKey: ["userContext"],
-    });
-    const currentTeamId = userContext.data?.currentTeamId;
+    const { profile, isLoading: isLoadingProfile } = useProfile();
+    const currentTeamId = profile?.current_team_id;
 
-    return useQuery({
+    const {
+        data: teamMembers = [], // Provide default empty array
+        isLoading: isLoadingMembers,
+        error,
+        refetch,
+    } = useQuery({
         queryKey: ["teamMembers", currentTeamId],
         queryFn: async () => {
-            if (!currentTeamId) throw new Error("No team ID available");
+            if (!currentTeamId) return [];
 
             const supabase = createClient();
             const { data: members, error: membersError } = await supabase
@@ -61,8 +61,15 @@ export function useTeamMembers() {
                 };
             });
         },
-        enabled: !!currentTeamId,
+        enabled: !!currentTeamId && !isLoadingProfile,
         staleTime: 5 * 60 * 1000, // 5 minutes
         gcTime: 30 * 60 * 1000, // 30 minutes
     });
+
+    return {
+        teamMembers,
+        isLoading: isLoadingProfile || isLoadingMembers,
+        error,
+        refetch,
+    };
 }

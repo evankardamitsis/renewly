@@ -33,18 +33,18 @@ interface AssigneeSelectProps {
 }
 
 export function AssigneeSelect({
-    teamMembers,
+    teamMembers = [],
     selectedAssigneeId,
     onAssigneeSelect,
 }: AssigneeSelectProps) {
-    const [open, setOpen] = useState(true)
+    const [open, setOpen] = useState(false)
     const [search, setSearch] = useState("")
 
-    const selectedMember = teamMembers.find((m) => m.id === selectedAssigneeId)
-    const filteredMembers = teamMembers.filter(member =>
+    const selectedMember = teamMembers?.find((m) => m.id === selectedAssigneeId)
+    const filteredMembers = teamMembers?.filter(member =>
         member.name.toLowerCase().includes(search.toLowerCase()) ||
         member.email.toLowerCase().includes(search.toLowerCase())
-    )
+    ) || []
 
     return (
         <div className="w-[200px]">

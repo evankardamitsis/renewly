@@ -289,7 +289,6 @@ export default function ProjectPage() {
               <TabsContent value="table">
                 <TaskTable
                   tasks={filteredTasks}
-                  onTaskClick={handleTaskClick}
                   onTaskDelete={handleTaskDelete}
                   onTaskUpdate={loadProjectTasks}
                 />
@@ -299,7 +298,6 @@ export default function ProjectPage() {
                   <TaskBoard
                     tasks={filteredTasks}
                     onTaskClick={handleTaskClick}
-                    onTaskDelete={handleTaskDelete}
                   />
                 </TabsContent>
               )}

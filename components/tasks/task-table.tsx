@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Trash, RefreshCw } from "lucide-react";
 import { Task } from "@/types/task";
-import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { TeamMember, useTeamMembers } from "@/hooks/useTeamMembers";
 import { AssigneeSelect } from "./assignee-select";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -20,6 +20,7 @@ interface TaskTableProps {
   tasks: Task[];
   onTaskDelete: (taskId: string) => void;
   onTaskUpdate: () => void;
+  onTaskClick?: (task: Task) => Promise<void>;
 }
 
 const PRIORITY_VARIANTS = {
@@ -37,26 +38,19 @@ const STATUS_VARIANTS = {
 function getNextDueDate(currentDueDate: string, recurringInterval: string): string {
   const date = new Date(currentDueDate);
 
-  // Parse the interval into number and unit
-  const match = recurringInterval.match(/^(\d+)?([a-zA-Z]+)$/);
-  if (!match) return date.toISOString();
-
-  const [, count = "1", unit] = match;
-  const amount = parseInt(count, 10);
-
-  switch (unit) {
-    case "day":
-    case "days":
-      return addDays(date, amount).toISOString();
-    case "week":
-    case "weeks":
-      return addWeeks(date, amount).toISOString();
-    case "month":
-    case "months":
-      return addMonths(date, amount).toISOString();
-    case "year":
-    case "years":
-      return addYears(date, amount).toISOString();
+  switch (recurringInterval) {
+    case "annual":
+      return addYears(date, 1).toISOString();
+    case "6month":
+      return addMonths(date, 6).toISOString();
+    case "3month":
+      return addMonths(date, 3).toISOString();
+    case "monthly":
+      return addMonths(date, 1).toISOString();
+    case "weekly":
+      return addWeeks(date, 1).toISOString();
+    case "daily":
+      return addDays(date, 1).toISOString();
     default:
       return date.toISOString();
   }
@@ -72,9 +66,8 @@ const isNearDueDate = (dueDate: string | null) => {
   });
 };
 
-export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps) {
-  const { data: teamMembersData } = useTeamMembers();
-  const teamMembers = teamMembersData || [];
+export function TaskTable({ tasks, onTaskDelete, onTaskUpdate, onTaskClick }: TaskTableProps) {
+  const { teamMembers } = useTeamMembers();
   const [editingAssignee, setEditingAssignee] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -127,7 +120,7 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps)
       if (error) throw error;
 
       // Show success toast
-      const assignee = userId ? teamMembers.find(m => m.id === userId)?.name : 'no one';
+      const assignee = userId ? teamMembers.find((m: TeamMember) => m.id === userId)?.name : 'no one';
       toast.success(`Task has been assigned to ${assignee}`);
 
       // Create notification for the assigned user
@@ -190,6 +183,14 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps)
     }
   };
 
+  const handleTaskClick = (task: Task) => {
+    if (onTaskClick) {
+      onTaskClick(task);
+    } else {
+      setSelectedTask(task);
+    }
+  };
+
   return (
     <>
       <div className="rounded-md border">
@@ -214,7 +215,7 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps)
               <TableRow
                 key={task.id}
                 className="cursor-pointer hover:bg-muted/50"
-                onClick={() => setSelectedTask(task)}
+                onClick={() => handleTaskClick(task)}
               >
                 <TableCell>{task.title}</TableCell>
                 <TableCell>
@@ -275,14 +276,14 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps)
                         <>
                           <Avatar className="h-6 w-6">
                             <AvatarImage
-                              src={teamMembers.find((m) => m.id === task.assigned_to)?.image}
-                              alt={teamMembers.find((m) => m.id === task.assigned_to)?.name}
+                              src={teamMembers.find((m: TeamMember) => m.id === task.assigned_to)?.image}
+                              alt={teamMembers.find((m: TeamMember) => m.id === task.assigned_to)?.name}
                             />
                             <AvatarFallback>
-                              {teamMembers.find((m) => m.id === task.assigned_to)?.name?.[0]}
+                              {teamMembers.find((m: TeamMember) => m.id === task.assigned_to)?.name?.[0]}
                             </AvatarFallback>
                           </Avatar>
-                          <span>{teamMembers.find((m) => m.id === task.assigned_to)?.name}</span>
+                          <span>{teamMembers.find((m: TeamMember) => m.id === task.assigned_to)?.name}</span>
                         </>
                       ) : (
                         <span className="text-muted-foreground">Unassigned</span>

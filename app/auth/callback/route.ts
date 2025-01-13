@@ -1,70 +1,50 @@
-import { type EmailOtpType } from "@supabase/supabase-js";
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { type CookieOptions, createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 
-export async function GET(request: NextRequest) {
-    const { searchParams } = new URL(request.url);
-    const token_hash = searchParams.get("token_hash");
-    const type = searchParams.get("type") as EmailOtpType | null;
-    const code = searchParams.get("code");
-    const invitation_token = searchParams.get("invitation_token");
-    const next = searchParams.get("next") ?? "/";
+export async function GET(request: Request) {
+    const requestUrl = new URL(request.url);
+    const code = requestUrl.searchParams.get("code");
 
-    const redirectTo = request.nextUrl.clone();
-    redirectTo.pathname = next;
-
-    try {
-        const supabase = createClient();
-        const supabaseClient = await supabase;
-
-        if (token_hash && type) {
-            const { error } = await supabaseClient.auth.verifyOtp({
-                type,
-                token_hash,
-            });
-            if (!error) {
-                // If this is an invitation, redirect to onboarding
-                if (type === "invite" && invitation_token) {
-                    redirectTo.pathname = "/onboarding";
-                    redirectTo.searchParams.set(
-                        "invitation_token",
-                        invitation_token,
-                    );
-                    return NextResponse.redirect(redirectTo);
-                }
-                // Otherwise handle password reset
-                redirectTo.pathname = "/reset-password/confirm";
-                return NextResponse.redirect(redirectTo);
-            }
-        }
-
-        // Handle code exchange for password reset
-        if (code) {
-            const { error } = await supabaseClient.auth.exchangeCodeForSession(
-                code,
-            );
-            if (!error) {
-                // If this is an invitation, redirect to onboarding
-                if (invitation_token) {
-                    redirectTo.pathname = "/onboarding";
-                    redirectTo.searchParams.set(
-                        "invitation_token",
-                        invitation_token,
-                    );
-                    return NextResponse.redirect(redirectTo);
-                }
-                // Otherwise handle password reset
-                redirectTo.pathname = "/reset-password/confirm";
-                return NextResponse.redirect(redirectTo);
-            }
-        }
-
-        // If we get here, something went wrong
-        redirectTo.pathname = "/auth/auth-code-error";
-        return NextResponse.redirect(redirectTo);
-    } catch (error) {
-        console.error("Auth error:", error);
-        redirectTo.pathname = "/auth/auth-code-error";
-        return NextResponse.redirect(redirectTo);
+    if (code) {
+        const supabase = createServerClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            {
+                cookies: {
+                    async get(name: string) {
+                        const cookieStore = await cookies();
+                        const cookie = cookieStore.get(name);
+                        return cookie?.value;
+                    },
+                    async set(
+                        name: string,
+                        value: string,
+                        options: CookieOptions,
+                    ) {
+                        try {
+                            const cookieStore = await cookies();
+                            cookieStore.set({ name, value, ...options });
+                        } catch (error) {
+                            // Handle cookies in edge functions
+                            console.error("Error setting cookie:", error);
+                        }
+                    },
+                    async remove(name: string) {
+                        try {
+                            const cookieStore = await cookies();
+                            cookieStore.delete(name);
+                        } catch (error) {
+                            // Handle cookies in edge functions
+                            console.error("Error removing cookie:", error);
+                        }
+                    },
+                },
+            },
+        );
+        await supabase.auth.exchangeCodeForSession(code);
     }
+
+    // URL to redirect to after sign in process completes
+    return NextResponse.redirect(new URL("/dashboard", requestUrl.origin));
 }

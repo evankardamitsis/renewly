@@ -26,6 +26,7 @@ import { useTaskActions } from "@/hooks/useTaskActions";
 import { tasksApi } from "@/services/api";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { Database } from "@/types/database";
+import { ProjectFiles } from "@/components/projects/project-files";
 
 type Project = Database["public"]["Tables"]["projects"]["Row"] & {
   has_board_enabled?: boolean;
@@ -246,6 +247,7 @@ export default function ProjectPage() {
                   {project.has_board_enabled && (
                     <TabsTrigger value="board">Board</TabsTrigger>
                   )}
+                  <TabsTrigger value="files">Files</TabsTrigger>
                 </TabsList>
                 <div className="flex items-center gap-2">
                   <Label htmlFor="enable-board" className="text-sm text-muted-foreground">
@@ -301,6 +303,9 @@ export default function ProjectPage() {
                   />
                 </TabsContent>
               )}
+              <TabsContent value="files">
+                <ProjectFiles projectId={project.id} />
+              </TabsContent>
             </Tabs>
           </div>
         </div>

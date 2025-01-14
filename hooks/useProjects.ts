@@ -1,47 +1,54 @@
-"use client"
+"use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { createClient } from "@/lib/supabase/client"
-import { queryKeys } from "@/lib/react-query"
-import { useProfile } from "./useProfile"
-import { useRouter } from "next/navigation"
-import { toast } from "sonner"
-import { Project } from "@/types/project"
-import React from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createClient } from "@/lib/supabase/client";
+import { queryKeys } from "@/lib/react-query";
+import { useProfile } from "./useProfile";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Project } from "@/types/project";
+import React from "react";
 
 interface CreateProjectData {
-  name: string
-  description?: string | null
-  status?: "Planning" | "In Progress" | "Review" | "Completed"
-  due_date?: string
+  name: string;
+  description?: string | null;
+  status_id?: string;
+  due_date?: string;
+  has_board_enabled?: boolean;
+  owner_id?: string;
 }
 
-const supabase = createClient()
+const supabase = createClient();
 
 async function getProjects(teamId: string) {
   const { data, error } = await supabase
     .from("projects")
     .select(`
       *,
-      tasks:tasks(count)
+      tasks:tasks(count),
+      status:project_statuses(
+        id,
+        name,
+        color
+      )
     `)
     .eq("team_id", teamId)
-    .in("status", ["Planning", "In Progress"])
-    .order("created_at", { ascending: false })
+    .order("created_at", { ascending: false });
 
-  if (error) throw error
+  if (error) throw error;
 
-  return data.map(project => ({
+  return data.map((project) => ({
     ...project,
-    taskCount: project.tasks[0].count
-  })) as Project[]
+    taskCount: project.tasks[0].count,
+    status: project.status?.[0] || null,
+  })) as Project[];
 }
 
 export function useProjects() {
-  const router = useRouter()
-  const { profile } = useProfile()
-  const queryClient = useQueryClient()
-  const teamId = profile?.current_team_id
+  const router = useRouter();
+  const { profile } = useProfile();
+  const queryClient = useQueryClient();
+  const teamId = profile?.current_team_id;
 
   // Prefetch projects data
   React.useEffect(() => {
@@ -50,15 +57,15 @@ export function useProjects() {
         queryKey: queryKeys.projects.all(teamId),
         queryFn: () => getProjects(teamId),
         staleTime: 30 * 60 * 1000,
-      })
+      });
     }
-  }, [teamId, queryClient])
+  }, [teamId, queryClient]);
 
   const projectsQuery = useQuery({
     queryKey: queryKeys.projects.all(teamId ?? ""),
     queryFn: () => {
-      if (!teamId) throw new Error("Team ID is required")
-      return getProjects(teamId)
+      if (!teamId) throw new Error("Team ID is required");
+      return getProjects(teamId);
     },
     enabled: !!teamId,
     staleTime: 30 * 60 * 1000, // 30 minutes
@@ -68,45 +75,59 @@ export function useProjects() {
     retry: 2,
     retryDelay: 1000,
     placeholderData: (oldData) => oldData,
-  })
+  });
 
   const createProject = useMutation({
     mutationFn: async (data: CreateProjectData) => {
-      if (!teamId) throw new Error("Team ID is required")
-      
+      if (!teamId) throw new Error("Team ID is required");
+
       // Generate a URL-friendly slug from the project name
       const slug = data.name
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-      
+        .replace(/^-+|-+$/g, "");
+
       const { data: project, error } = await supabase
         .from("projects")
-        .insert([{ 
-          ...data, 
+        .insert([{
+          ...data,
           team_id: teamId,
           slug,
-          status: data.status || "Planning"
+          has_board_enabled: data.has_board_enabled ?? false,
+          owner_id: data.owner_id || profile?.id,
         }])
-        .select()
-        .single()
+        .select(`
+          *,
+          status:project_statuses(
+            id,
+            name,
+            color
+          )
+        `)
+        .single();
 
-      if (error) throw error
-      return project as Project
+      if (error) throw error;
+      return project as Project;
     },
     onSuccess: (project) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all(teamId) })
-      toast.success("Project created successfully")
-      router.push(`/projects/${project.slug}`)
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.all(teamId),
+      });
+      toast.success("Project created successfully");
+      router.push(`/projects/${project.slug}`);
     },
     onError: (error) => {
-      const message = error instanceof Error ? error.message : "Failed to create project"
-      toast.error(message)
-    }
-  })
+      const message = error instanceof Error
+        ? error.message
+        : "Failed to create project";
+      toast.error(message);
+    },
+  });
 
   const updateProject = useMutation({
-    mutationFn: async ({ id, updates }: { id: string, updates: Partial<Project> }) => {
+    mutationFn: async (
+      { id, updates }: { id: string; updates: Partial<Project> },
+    ) => {
       const { data, error } = await supabase
         .from("projects")
         .update({
@@ -114,54 +135,69 @@ export function useProjects() {
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
-        .select()
-        .single()
+        .select(`
+          *,
+          status:project_statuses(
+            id,
+            name,
+            color
+          )
+        `)
+        .single();
 
-      if (error) throw error
-      return data as Project
+      if (error) throw error;
+      return data as Project;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all(teamId) })
-      queryClient.invalidateQueries({ queryKey: ["projects", variables.id] })
-      toast.success("Project updated successfully")
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.all(teamId),
+      });
+      queryClient.invalidateQueries({ queryKey: ["projects", variables.id] });
+      toast.success("Project updated successfully");
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to update project")
-    }
-  })
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update project",
+      );
+    },
+  });
 
   const deleteProject = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
         .from("projects")
         .delete()
-        .eq("id", id)
+        .eq("id", id);
 
-      if (error) throw error
+      if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all(teamId) })
-      toast.success("Project deleted successfully")
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.all(teamId),
+      });
+      toast.success("Project deleted successfully");
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to delete project")
-    }
-  })
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete project",
+      );
+    },
+  });
 
   return {
     // Data
     projects: projectsQuery.data ?? [],
-    
+
     // Loading states
     isLoading: projectsQuery.isLoading,
     error: projectsQuery.error,
     isCreating: createProject.isPending,
     isUpdating: updateProject.isPending,
     isDeleting: deleteProject.isPending,
-    
+
     // Actions
     createProject: createProject.mutate,
     updateProject: updateProject.mutate,
     deleteProject: deleteProject.mutate,
-  }
-} 
+  };
+}

@@ -253,10 +253,16 @@ export function useDeleteProjectFile() {
 
     return useMutation({
         mutationFn: deleteProjectFile,
-        onSuccess: (_, fileId) => {
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.projects.file(fileId),
-            });
+        onSuccess: async (_, fileId) => {
+            // Get the project ID from the cache
+            const file = queryClient.getQueryData<any>(
+                queryKeys.projects.file(fileId),
+            );
+            if (file?.project_id) {
+                await queryClient.invalidateQueries({
+                    queryKey: queryKeys.projects.files(file.project_id),
+                });
+            }
         },
     });
 }

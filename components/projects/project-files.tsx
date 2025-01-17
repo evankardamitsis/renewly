@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useUserContext } from '@/hooks/useUserContext'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Icons } from '@/components/icons'
 import { formatBytes, getFileTypeFromName } from '@/lib/utils/file-utils'
 import { useProjectFiles, useUploadProjectFile, useDeleteProjectFile } from '@/lib/react-query'
@@ -24,7 +25,7 @@ const queryKeys = {
     })
 } as const
 
-function FilePreview({ file }: { file: ProjectFile }) {
+function FilePreview({ file, onImageClick }: { file: ProjectFile; onImageClick?: () => void }) {
     const fileType = getFileTypeFromName(file.name)
 
     // Use the secure API route for image previews
@@ -34,7 +35,10 @@ function FilePreview({ file }: { file: ProjectFile }) {
 
     if (previewUrl) {
         return (
-            <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted">
+            <div
+                className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted cursor-pointer"
+                onClick={onImageClick}
+            >
                 <Image
                     src={previewUrl}
                     alt={file.name}
@@ -66,6 +70,7 @@ export function ProjectFiles({ projectId }: ProjectFilesProps) {
     const { data: files = [], isLoading } = useProjectFiles(projectId)
     const { mutateAsync: uploadFile } = useUploadProjectFile()
     const { mutateAsync: deleteFile } = useDeleteProjectFile()
+    const [selectedImage, setSelectedImage] = useState<ProjectFile | null>(null)
 
     const onDrop = useCallback(async (acceptedFiles: File[]) => {
         if (!projectId || !userData?.user?.id) return
@@ -163,6 +168,25 @@ export function ProjectFiles({ projectId }: ProjectFilesProps) {
 
     return (
         <div className="space-y-4">
+            <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
+                <DialogContent className="max-w-4xl h-[80vh] flex items-center justify-center p-0">
+                    <DialogTitle className="sr-only">
+                        {selectedImage ? `Preview: ${selectedImage.name}` : 'Image Preview'}
+                    </DialogTitle>
+                    {selectedImage && (
+                        <div className="relative w-full h-full">
+                            <Image
+                                src={`/api/files/${selectedImage.storage_path}/preview`}
+                                alt={selectedImage.name}
+                                fill
+                                className="object-contain"
+                                sizes="80vw"
+                            />
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
             <ConfirmationModal
                 open={!!fileToDelete}
                 onOpenChange={(open) => !open && setFileToDelete(null)}
@@ -207,7 +231,14 @@ export function ProjectFiles({ projectId }: ProjectFilesProps) {
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                     {files.map((file) => (
                         <Card key={file.id} className="overflow-hidden">
-                            <FilePreview file={file} />
+                            <FilePreview
+                                file={file}
+                                onImageClick={() => {
+                                    if (getFileTypeFromName(file.name).startsWith('image/')) {
+                                        setSelectedImage(file)
+                                    }
+                                }}
+                            />
                             <div className="p-3">
                                 <p className="truncate text-sm font-medium">{file.name}</p>
                                 <p className="text-xs text-muted-foreground">{formatBytes(file.size)}</p>

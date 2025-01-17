@@ -88,7 +88,8 @@ export function ProjectFiles({ projectId }: ProjectFilesProps) {
             queryClient.invalidateQueries(queryKeys.projectFiles(projectId))
         } catch (error) {
             console.error('Error uploading file:', error)
-            toast.error('Failed to upload file')
+            const message = error instanceof Error ? error.message : 'Failed to upload file'
+            toast.error(message)
         } finally {
             setIsUploading(false)
         }

@@ -13,6 +13,19 @@ export async function uploadProjectFile({
     projectId: string;
     userId: string;
 }): Promise<FileUploadResponse> {
+    // Check if file with same name exists
+    const { data: existingFiles, error: checkError } = await supabase
+        .from("project_files")
+        .select("name")
+        .eq("project_id", projectId)
+        .eq("name", file.name)
+        .single();
+
+    if (checkError && checkError.code !== "PGRST116") throw checkError; // PGRST116 is "no rows returned" error
+    if (existingFiles) {
+        throw new Error("A file with this name already exists in the project");
+    }
+
     const timestamp = new Date().getTime();
     const fileName = `${file.name.split(".")[0]}_${timestamp}.${
         file.name.split(".").pop()
@@ -49,17 +62,15 @@ export async function uploadProjectFile({
 export async function deleteProjectFile(fileId: string): Promise<void> {
     const { data: file, error: fetchError } = await supabase
         .from("project_files")
-        .select("project_id, name")
+        .select("storage_path")
         .eq("id", fileId)
         .single();
 
     if (fetchError) throw fetchError;
 
-    const filePath = `${file.project_id}/${file.name}`;
-
     const { error: storageError } = await supabase.storage
         .from("project-files")
-        .remove([filePath]);
+        .remove([file.storage_path]);
 
     if (storageError) throw storageError;
 

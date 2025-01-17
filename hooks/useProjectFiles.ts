@@ -34,6 +34,31 @@ async function getProjectFiles(projectId: string) {
     return data as ProjectFile[];
 }
 
+type SupportedFormats = {
+    [key: string]: string[];
+};
+
+const SUPPORTED_FORMATS: SupportedFormats = {
+    // Images
+    "image/jpeg": [".jpg", ".jpeg"],
+    "image/png": [".png"],
+    "image/gif": [".gif"],
+    // Documents
+    "application/pdf": [".pdf"],
+    "application/msword": [".doc"],
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
+        ".docx",
+    ],
+    "application/vnd.ms-excel": [".xls"],
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [
+        ".xlsx",
+    ],
+    "text/plain": [".txt"],
+    "text/csv": [".csv"],
+};
+
+const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB
+
 export function useProjectFiles(projectId: string) {
     const queryClient = useQueryClient();
 
@@ -47,9 +72,46 @@ export function useProjectFiles(projectId: string) {
 
     const uploadFile = useMutation({
         mutationFn: async ({ projectId, file }: UploadFileData) => {
+            // Check file size
+            if (file.size > MAX_FILE_SIZE) {
+                throw new Error("File is too large. Maximum size is 3MB");
+            }
+
+            // Check file type
+            const fileExt = `.${
+                file.name.split(".").pop()?.toLowerCase() || ""
+            }`;
+            const isSupported = Object.entries(SUPPORTED_FORMATS).some(
+                ([mimeType, extensions]) =>
+                    file.type === mimeType || extensions.includes(fileExt),
+            );
+
+            if (!isSupported) {
+                throw new Error(
+                    "File type not supported. Please upload a supported format.",
+                );
+            }
+
+            // Check for duplicate file names
+            const { data: existingFile, error: checkError } = await supabase
+                .from("project_files")
+                .select("name")
+                .eq("project_id", projectId)
+                .eq("name", file.name)
+                .single();
+
+            if (checkError && checkError.code !== "PGRST116") throw checkError;
+            if (existingFile) {
+                throw new Error(
+                    "A file with this name already exists in the project",
+                );
+            }
+
             // 1. Upload to Supabase Storage
-            const fileExt = file.name.split(".").pop();
-            const fileName = `${Math.random()}.${fileExt}`;
+            const timestamp = new Date().getTime();
+            const fileName = `${
+                file.name.split(".")[0]
+            }_${timestamp}.${fileExt}`;
             const { data: uploadData, error: uploadError } = await supabase
                 .storage
                 .from("project-files")

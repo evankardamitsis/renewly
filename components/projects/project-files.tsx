@@ -25,19 +25,16 @@ const queryKeys = {
     })
 } as const
 
-function FilePreview({ file, onImageClick }: { file: ProjectFile; onImageClick?: () => void }) {
+function FilePreview({ file, onFileClick }: { file: ProjectFile; onFileClick?: () => void }) {
     const fileType = getFileTypeFromName(file.name)
+    const previewUrl = `/api/files/${file.storage_path}/preview`
 
-    // Use the secure API route for image previews
-    const previewUrl = fileType.startsWith('image/')
-        ? `/api/files/${file.storage_path}/preview`
-        : null
-
-    if (previewUrl) {
+    // Image preview
+    if (fileType.startsWith('image/')) {
         return (
             <div
                 className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted cursor-pointer"
-                onClick={onImageClick}
+                onClick={onFileClick}
             >
                 <Image
                     src={previewUrl}
@@ -50,13 +47,70 @@ function FilePreview({ file, onImageClick }: { file: ProjectFile; onImageClick?:
         )
     }
 
-    const getFileIcon = () => {
-        return <Icons.file className="h-12 w-12" />
+    // PDF preview
+    if (fileType === 'application/pdf') {
+        return (
+            <div
+                className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted cursor-pointer group"
+                onClick={onFileClick}
+            >
+                <iframe
+                    src={previewUrl}
+                    className="h-full w-full pointer-events-none"
+                    title={`PDF preview: ${file.name}`}
+                />
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Icons.maximize className="h-8 w-8 text-white" />
+                    <span className="text-xs text-white mt-2">Click to expand</span>
+                </div>
+            </div>
+        )
     }
 
+    // CSV preview
+    if (fileType === 'text/csv') {
+        return (
+            <div
+                className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted cursor-pointer group"
+                onClick={onFileClick}
+            >
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <Icons.table className="h-12 w-12" />
+                </div>
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Icons.maximize className="h-8 w-8 text-white" />
+                    <span className="text-xs text-white mt-2">Click to view data</span>
+                </div>
+            </div>
+        )
+    }
+
+    // Document preview (doc, docx)
+    if (fileType.includes('word')) {
+        return (
+            <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted p-2">
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <Icons.fileText className="h-12 w-12" />
+                </div>
+            </div>
+        )
+    }
+
+    // Spreadsheet preview (xls, xlsx)
+    if (fileType.includes('excel')) {
+        return (
+            <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted p-2">
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <Icons.table className="h-12 w-12" />
+                </div>
+            </div>
+        )
+    }
+
+    // Default file icon
     return (
         <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-muted">
-            {getFileIcon()}
+            <Icons.file className="h-12 w-12" />
         </div>
     )
 }
@@ -70,7 +124,9 @@ export function ProjectFiles({ projectId }: ProjectFilesProps) {
     const { data: files = [], isLoading } = useProjectFiles(projectId)
     const { mutateAsync: uploadFile } = useUploadProjectFile()
     const { mutateAsync: deleteFile } = useDeleteProjectFile()
-    const [selectedImage, setSelectedImage] = useState<ProjectFile | null>(null)
+    const [selectedFile, setSelectedFile] = useState<ProjectFile | null>(null)
+    const [previewUrl, setPreviewUrl] = useState<string>('')
+    const [csvData, setCsvData] = useState<string[][]>([])
 
     const onDrop = useCallback(async (acceptedFiles: File[]) => {
         if (!projectId || !userData?.user?.id) return
@@ -97,17 +153,7 @@ export function ProjectFiles({ projectId }: ProjectFilesProps) {
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
-        maxFiles: 1,
-        maxSize: 50 * 1024 * 1024, // 50MB
-        accept: {
-            'image/*': ['.png', '.jpg', '.jpeg', '.gif'],
-            'application/pdf': ['.pdf'],
-            'application/msword': ['.doc'],
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-            'application/vnd.ms-excel': ['.xls'],
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
-            'text/plain': ['.txt']
-        }
+        maxFiles: 1
     })
 
     if (isLoading) {
@@ -167,22 +213,107 @@ export function ProjectFiles({ projectId }: ProjectFilesProps) {
         }
     }
 
+    const getSignedUrl = async (file: ProjectFile) => {
+        try {
+            const response = await fetch(`/api/files/${file.storage_path}/download`)
+            const { url } = await response.json()
+            return url
+        } catch (error) {
+            console.error('Error getting signed URL:', error)
+            toast.error('Failed to load preview')
+            return null
+        }
+    }
+
+    const handleFileSelect = async (file: ProjectFile) => {
+        const type = getFileTypeFromName(file.name)
+        setSelectedFile(file)
+
+        if (type === 'application/pdf') {
+            const url = await getSignedUrl(file)
+            if (url) setPreviewUrl(url)
+        } else if (type === 'text/csv') {
+            try {
+                const response = await fetch(`/api/files/${file.storage_path}/download`)
+                const { url } = await response.json()
+                const csvResponse = await fetch(url)
+                const text = await csvResponse.text()
+                // Parse CSV more robustly
+                const rows = text.split(/\r?\n/).filter(Boolean).map(row => {
+                    // Handle quoted values with commas
+                    const matches = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || []
+                    return matches.map(val => val.replace(/^"|"$/g, '').trim())
+                })
+                setCsvData(rows)
+            } catch (error) {
+                console.error('Error loading CSV:', error)
+                toast.error('Failed to load CSV data')
+            }
+        }
+    }
+
     return (
         <div className="space-y-4">
-            <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
+            <Dialog
+                open={!!selectedFile}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setSelectedFile(null)
+                        setPreviewUrl('')
+                        setCsvData([])
+                    }
+                }}
+            >
                 <DialogContent className="max-w-4xl h-[80vh] flex items-center justify-center p-0">
                     <DialogTitle className="sr-only">
-                        {selectedImage ? `Preview: ${selectedImage.name}` : 'Image Preview'}
+                        {selectedFile ? `Preview: ${selectedFile.name}` : 'File Preview'}
                     </DialogTitle>
-                    {selectedImage && (
+                    {selectedFile && (
                         <div className="relative w-full h-full">
-                            <Image
-                                src={`/api/files/${selectedImage.storage_path}/preview`}
-                                alt={selectedImage.name}
-                                fill
-                                className="object-contain"
-                                sizes="80vw"
-                            />
+                            {getFileTypeFromName(selectedFile.name).startsWith('image/') ? (
+                                <Image
+                                    src={`/api/files/${selectedFile.storage_path}/preview`}
+                                    alt={selectedFile.name}
+                                    fill
+                                    className="object-contain"
+                                    sizes="80vw"
+                                />
+                            ) : getFileTypeFromName(selectedFile.name) === 'text/csv' && csvData.length > 0 ? (
+                                <div className="w-full h-full overflow-auto p-6">
+                                    <table className="w-full border-collapse bg-background">
+                                        <thead className="sticky top-0 bg-background">
+                                            <tr>
+                                                {csvData[0]?.map((header, i) => (
+                                                    <th key={i} className="border px-4 py-2 bg-muted text-left">
+                                                        {header}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {csvData.slice(1).map((row, i) => (
+                                                <tr key={i}>
+                                                    {row.map((cell, j) => (
+                                                        <td key={j} className="border px-4 py-2">
+                                                            {cell}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : previewUrl ? (
+                                <iframe
+                                    src={previewUrl}
+                                    className="h-full w-full"
+                                    title={`PDF preview: ${selectedFile.name}`}
+                                />
+                            ) : (
+                                <div className="flex items-center justify-center h-full">
+                                    <Icons.spinner className="h-8 w-8 animate-spin" />
+                                </div>
+                            )}
                         </div>
                     )}
                 </DialogContent>
@@ -220,9 +351,9 @@ export function ProjectFiles({ projectId }: ProjectFilesProps) {
                             Drag and drop a file here, or click to select a file
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                            Supported formats: PNG, JPG, JPEG, GIF, PDF, DOC, DOCX, XLS, XLSX, TXT
+                            Supported formats: Images (JPG, PNG, GIF), Documents (PDF, DOC, DOCX), Spreadsheets (XLS, XLSX), Text (TXT, CSV)
                             <br />
-                            Maximum file size: 50MB
+                            Maximum file size: 3MB
                         </p>
                     </>
                 )}
@@ -234,11 +365,7 @@ export function ProjectFiles({ projectId }: ProjectFilesProps) {
                         <Card key={file.id} className="overflow-hidden">
                             <FilePreview
                                 file={file}
-                                onImageClick={() => {
-                                    if (getFileTypeFromName(file.name).startsWith('image/')) {
-                                        setSelectedImage(file)
-                                    }
-                                }}
+                                onFileClick={() => handleFileSelect(file)}
                             />
                             <div className="p-3">
                                 <p className="truncate text-sm font-medium">{file.name}</p>

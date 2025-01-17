@@ -4,9 +4,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { path: string[] } },
+    context: { params: { path: string | string[] } },
 ) {
     try {
+        const params = await context.params;
+
         // Initialize Supabase client
         const cookieStore = await cookies();
         const supabase = createServerClient(
@@ -27,8 +29,11 @@ export async function GET(
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
-        // Join the path segments
-        const storagePath = params.path.join("/");
+        // Handle path parameter
+        const pathArray = Array.isArray(params.path)
+            ? params.path
+            : [params.path];
+        const storagePath = pathArray.join("/");
 
         // Check if this is a preview or download request
         const isPreview = storagePath.endsWith("/preview");

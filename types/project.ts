@@ -33,4 +33,5 @@ export interface Project {
   has_board_enabled: boolean;
   owner_id: string | null;
   taskCount?: number;
+  tasks?: string[];
 }

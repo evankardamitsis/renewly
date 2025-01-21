@@ -12,10 +12,36 @@ import React from "react";
 interface CreateProjectData {
   name: string;
   description?: string | null;
-  status_id?: string;
-  due_date?: string;
+  status_id?: string | null;
+  due_date?: string | null;
   has_board_enabled?: boolean;
   owner_id?: string;
+}
+
+interface ProjectStatus {
+  id: string;
+  name: string;
+  color: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+interface SupabaseProjectResponse {
+  id: string;
+  team_id: string;
+  name: string;
+  description: string | null;
+  status_id: string | null;
+  created_at: string;
+  updated_at: string;
+  due_date: string | null;
+  slug: string;
+  created_by: string | null;
+  has_board_enabled: boolean;
+  owner_id: string | null;
+  tasks?: { count: number }[];
+  status?: ProjectStatus | null;
 }
 
 const supabase = createClient();
@@ -24,12 +50,26 @@ async function getProjects(teamId: string) {
   const { data, error } = await supabase
     .from("projects")
     .select(`
-      *,
+      id,
+      team_id,
+      name,
+      description,
+      status_id,
+      created_at,
+      updated_at,
+      due_date,
+      slug,
+      created_by,
+      has_board_enabled,
+      owner_id,
       tasks:tasks(count),
-      status:project_statuses(
+      status:project_statuses!projects_status_id_fkey(
         id,
         name,
-        color
+        color,
+        description,
+        sort_order,
+        created_at
       )
     `)
     .eq("team_id", teamId)
@@ -37,11 +77,15 @@ async function getProjects(teamId: string) {
 
   if (error) throw error;
 
-  return data.map((project) => ({
-    ...project,
-    taskCount: project.tasks[0].count,
-    status: project.status?.[0] || null,
-  })) as Project[];
+  return (data as unknown as SupabaseProjectResponse[]).map((project) => {
+    const { tasks, status, ...rest } = project;
+    return {
+      ...rest,
+      tasks: [], // Initialize with empty array as per Project type
+      taskCount: tasks?.[0]?.count || 0,
+      status: status || null,
+    } as Project;
+  });
 }
 
 export function useProjects() {
@@ -81,6 +125,21 @@ export function useProjects() {
     mutationFn: async (data: CreateProjectData) => {
       if (!teamId) throw new Error("Team ID is required");
 
+      // If no status_id is provided, get the "Planning" status
+      if (!data.status_id) {
+        const { data: statuses, error: statusError } = await supabase
+          .from("project_statuses")
+          .select("*")
+          .eq("name", "Planning")
+          .single();
+
+        if (statusError) {
+          console.error("Error fetching default status:", statusError);
+          throw new Error("Failed to fetch default status");
+        }
+        data.status_id = statuses.id;
+      }
+
       // Generate a URL-friendly slug from the project name
       const slug = data.name
         .toLowerCase()
@@ -97,17 +156,39 @@ export function useProjects() {
           owner_id: data.owner_id || profile?.id,
         }])
         .select(`
-          *,
+          id,
+          name,
+          description,
+          created_at,
+          updated_at,
+          due_date,
+          slug,
+          team_id,
+          has_board_enabled,
+          status_id,
+          created_by,
+          owner_id,
           status:project_statuses(
             id,
             name,
-            color
+            color,
+            description,
+            sort_order,
+            created_at
           )
         `)
         .single();
 
       if (error) throw error;
-      return project as Project;
+
+      const response = project as unknown as SupabaseProjectResponse;
+      const { status, ...rest } = response;
+      return {
+        ...rest,
+        tasks: [],
+        taskCount: 0,
+        status: status || null,
+      } as Project;
     },
     onSuccess: (project) => {
       queryClient.invalidateQueries({
@@ -117,6 +198,7 @@ export function useProjects() {
       router.push(`/projects/${project.slug}`);
     },
     onError: (error) => {
+      console.error("Project creation error:", error);
       const message = error instanceof Error
         ? error.message
         : "Failed to create project";
@@ -136,17 +218,39 @@ export function useProjects() {
         })
         .eq("id", id)
         .select(`
-          *,
+          id,
+          team_id,
+          name,
+          description,
+          status_id,
+          created_at,
+          updated_at,
+          due_date,
+          slug,
+          created_by,
+          has_board_enabled,
+          owner_id,
           status:project_statuses(
             id,
             name,
-            color
+            color,
+            description,
+            sort_order,
+            created_at
           )
         `)
         .single();
 
       if (error) throw error;
-      return data as Project;
+
+      const response = data as unknown as SupabaseProjectResponse;
+      const { status, ...rest } = response;
+      return {
+        ...rest,
+        tasks: [],
+        taskCount: 0,
+        status: status || null,
+      } as Project;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({

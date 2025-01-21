@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { useProjects } from "@/hooks/useProjects";
+import { Badge } from "@/components/ui/badge";
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -26,20 +27,21 @@ export default function ProjectsPage() {
     isLoading,
     createProject,
     deleteProject,
+    isCreating,
   } = useProjects();
 
   const handleProjectCreate = async (newProject: {
     name: string;
     description: string | null;
+    status_id: string;
+    due_date: string | null;
   }) => {
     try {
-      await createProject({
-        name: newProject.name,
-        description: newProject.description,
-      });
+      await createProject(newProject);
+      toast.success("Project created successfully");
       setIsModalOpen(false);
     } catch (err) {
-      toast.error("Failed to create project");
+      toast.error(err instanceof Error ? err.message : "Failed to create project");
     }
   };
 
@@ -54,12 +56,25 @@ export default function ProjectsPage() {
 
     try {
       await deleteProject(projectToDelete);
+      toast.success("Project deleted successfully");
       setIsDeleteModalOpen(false);
       setProjectToDelete(null);
     } catch (err) {
-      toast.error("Failed to delete project");
+      toast.error(err instanceof Error ? err.message : "Failed to delete project");
+      setIsDeleteModalOpen(false);
+      setProjectToDelete(null);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-6">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-muted-foreground">Loading projects...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-6">
@@ -75,7 +90,7 @@ export default function ProjectsPage() {
         {projects.map((project) => (
           <div
             key={project.id}
-            className="group bg-card rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow relative"
+            className="group bg-card rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow relative cursor-pointer"
             onClick={() => router.push(`/projects/${project.slug}`)}
           >
             <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -99,7 +114,20 @@ export default function ProjectsPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <h2 className="text-xl font-semibold mb-2">{project.name}</h2>
+            <div className="flex items-center gap-2 mb-2">
+              <h2 className="text-xl font-semibold">{project.name}</h2>
+              {project.status && (
+                <Badge
+                  className="capitalize"
+                  style={{
+                    backgroundColor: project.status.color,
+                    color: 'white'
+                  }}
+                >
+                  {project.status.name}
+                </Badge>
+              )}
+            </div>
             <p className="text-muted-foreground mb-4 line-clamp-2">
               {project.description}
             </p>
@@ -127,6 +155,7 @@ export default function ProjectsPage() {
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
         onSubmit={handleProjectCreate}
+        loading={isCreating}
       />
 
       <ConfirmationModal

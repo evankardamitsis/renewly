@@ -6,7 +6,6 @@ import { Plus, Clock, Users } from "lucide-react";
 import { TaskModal } from "@/components/tasks/task-modal";
 import { ProjectModal } from "@/components/projects/project-modal";
 import { ActiveProjectsCard } from "@/components/dashboard/active-projects-card";
-import { TeamManagementCard } from "@/components/team-management/team-management-card";
 import { ChatCard } from "@/components/dashboard/chat-card";
 import { useAuth } from "@/contexts/auth-context";
 import { useProfile } from "@/hooks/useProfile";
@@ -121,12 +120,12 @@ export default function DashboardPage() {
         <ActiveProjectsCard />
 
         {/* Team Management Card */}
-        <TeamManagementCard
+        {/* <TeamManagementCard
           currentUserRole={{
             role: profile?.role ?? "member",
             is_super_admin: profile?.is_super_admin ?? false
           }}
-        />
+        /> */}
 
         {/* Tasks Card */}
         <Card className="bg-card/50">

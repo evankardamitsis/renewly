@@ -20,21 +20,6 @@ function handleError(error: unknown): never {
   throw new ApiError(message);
 }
 
-// Type for the raw project data from the database
-interface RawProjectWithTaskCount {
-  id: string;
-  name: string;
-  description: string | null;
-  status: string;
-  created_at: string;
-  updated_at: string;
-  due_date: string | null;
-  slug: string;
-  team_id: string;
-  has_board_enabled: boolean;
-  tasks: { count: number }[];
-}
-
 export const projectsApi = {
   list: async (teamId: string): Promise<Project[]> => {
     try {
@@ -42,20 +27,29 @@ export const projectsApi = {
         .from("projects")
         .select(`
           id,
+          team_id,
           name,
           description,
-          status,
+          status_id,
           created_at,
           updated_at,
           due_date,
           slug,
-          team_id,
+          created_by,
           has_board_enabled,
-          tasks:tasks(count)
+          owner_id,
+          tasks:tasks(count),
+          status:project_statuses!projects_status_id_fkey(
+            id,
+            name,
+            color,
+            description,
+            sort_order,
+            created_at
+          )
         `)
         .eq("team_id", teamId)
-        .order("created_at", { ascending: false })
-        .abortSignal(new AbortController().signal);
+        .order("created_at", { ascending: false });
 
       if (error) {
         console.error("Error fetching projects:", error);
@@ -63,13 +57,12 @@ export const projectsApi = {
       }
 
       // Transform the raw data into the expected Project type
-      const projects = (data || []).map((
-        rawProject: RawProjectWithTaskCount,
-      ) => ({
+      const projects = (data || []).map((rawProject) => ({
         ...rawProject,
         tasks: [], // Initialize with empty array as per Project type
         taskCount: rawProject.tasks[0]?.count || 0, // Store count separately
-      }));
+        status: rawProject.status || null, // Status is already an object
+      })) as Project[];
 
       return projects;
     } catch (error) {
@@ -88,10 +81,30 @@ export const projectsApi = {
           ...data,
           team_id,
           created_by: (await supabase.auth.getUser()).data.user?.id,
-          status: data.status || "Planning",
           has_board_enabled: false,
         })
-        .select()
+        .select(`
+          id,
+          team_id,
+          name,
+          description,
+          status_id,
+          created_at,
+          updated_at,
+          due_date,
+          slug,
+          created_by,
+          has_board_enabled,
+          owner_id,
+          status:project_statuses!projects_status_id_fkey(
+            id,
+            name,
+            color,
+            description,
+            sort_order,
+            created_at
+          )
+        `)
         .single();
 
       if (error) {
@@ -100,7 +113,14 @@ export const projectsApi = {
         throw new ApiError(message);
       }
 
-      return project;
+      // Map the response to match the Project type
+      const mappedProject = {
+        ...project,
+        tasks: [], // Initialize with empty array as per Project type
+        status: project.status || null, // Status is already an object
+      } as Project;
+
+      return mappedProject;
     } catch (error) {
       return handleError(error);
     }
@@ -115,12 +135,41 @@ export const projectsApi = {
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
-        .select()
+        .select(`
+          id,
+          team_id,
+          name,
+          description,
+          status_id,
+          created_at,
+          updated_at,
+          due_date,
+          slug,
+          created_by,
+          has_board_enabled,
+          owner_id,
+          status:project_statuses!projects_status_id_fkey(
+            id,
+            name,
+            color,
+            description,
+            sort_order,
+            created_at
+          )
+        `)
         .single();
 
       if (error) throw error;
       if (!data) throw new ApiError("Project not found");
-      return data as Project;
+
+      // Map the response to match the Project type
+      const mappedProject = {
+        ...data,
+        tasks: [], // Initialize with empty array as per Project type
+        status: data.status || null, // Status is already an object
+      } as Project;
+
+      return mappedProject;
     } catch (error) {
       return handleError(error);
     }
@@ -260,7 +309,9 @@ interface CreateProjectData {
   description?: string | null;
   team_id: string;
   slug: string;
-  status?: "Planning" | "In Progress" | "Review" | "Completed";
-  due_date?: string;
-  tasks?: never[];
+  status_id?: string | null;
+  due_date?: string | null;
+  has_board_enabled?: boolean;
+  created_by?: string | null;
+  owner_id?: string | null;
 }

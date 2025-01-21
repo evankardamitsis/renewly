@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { calculateDaysLeft } from "@/utils/date";
 import { useProjects } from "@/hooks/useProjects";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 
 export function ActiveProjectsCard() {
   const router = useRouter();
@@ -13,7 +15,7 @@ export function ActiveProjectsCard() {
 
   if (error) {
     return (
-      <Card className="bg-card/50">
+      <Card className="bg-card/50 col-span-2">
         <CardContent className="p-6">
           <div className="text-destructive text-center">
             Error: {error instanceof Error ? error.message : "Failed to load projects"}
@@ -25,7 +27,7 @@ export function ActiveProjectsCard() {
 
   if (isLoading) {
     return (
-      <Card className="bg-card/50">
+      <Card className="bg-card/50 col-span-2">
         <CardContent className="p-6">
           <LoadingSpinner />
         </CardContent>
@@ -34,28 +36,70 @@ export function ActiveProjectsCard() {
   }
 
   return (
-    <Card className="bg-card/50">
-      <CardHeader>
+    <Card className="bg-card/50 col-span-2">
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Active Projects</CardTitle>
+        <Badge variant="secondary">{projects.length} Total</Badge>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {projects.map((project) => (
-            <div
-              key={project.id}
-              className="flex items-center justify-between cursor-pointer hover:bg-accent/50 rounded-lg p-2 transition-colors"
-              onClick={() => router.push(`/projects/${project.slug}`)}
-            >
-              <div>
-                <p className="font-medium">{project.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {project.due_date ? calculateDaysLeft(project.due_date) : 0}{" "}
-                  days left
-                </p>
+        <div className="space-y-6">
+          {projects.map((project) => {
+            return (
+              <div
+                key={project.id}
+                className="group cursor-pointer hover:bg-accent/50 rounded-lg p-4 transition-colors"
+                onClick={() => router.push(`/projects/${project.slug}`)}
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{project.name}</p>
+                      {project.status && (
+                        <Badge
+                          className="capitalize"
+                          style={{
+                            backgroundColor: project.status.color,
+                            color: 'white'
+                          }}
+                        >
+                          {project.status.name}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {project.due_date && (
+                        <span>Due {new Date(project.due_date).toLocaleDateString()}</span>
+                      )}
+                    </div>
+                  </div>
+                  {project.description && (
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {project.description}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-4">
+                      <span className="text-muted-foreground">
+                        {project.taskCount || 0} tasks
+                      </span>
+                      {project.due_date && (
+                        <span className="text-muted-foreground">
+                          {calculateDaysLeft(project.due_date)} days left
+                        </span>
+                      )}
+                    </div>
+                    <Progress
+                      value={33}
+                      className={cn(
+                        "w-24",
+                        project.status?.color ? `[--progress:${project.status.color}]` : undefined
+                      )}
+                    />
+                  </div>
+                </div>
               </div>
-              <Badge variant="secondary">{project.taskCount || 0} tasks</Badge>
-            </div>
-          ))}
+            );
+          })}
           {projects.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">
               No active projects. Create one to get started!

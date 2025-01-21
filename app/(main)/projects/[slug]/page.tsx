@@ -9,7 +9,6 @@ import { TaskFilters } from "@/components/tasks/task-filters";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Plus, MoreVertical, Trash } from "lucide-react";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { TaskModal } from "@/components/tasks/task-modal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
@@ -27,9 +26,11 @@ import { tasksApi } from "@/services/api";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { Database } from "@/types/database";
 import { ProjectFiles } from "@/components/projects/project-files";
+import { Badge } from "@/components/ui/badge";
+import { Project } from "@/types/project";
 
-type Project = Database["public"]["Tables"]["projects"]["Row"] & {
-  has_board_enabled?: boolean;
+type ProjectWithTasks = Project & {
+  tasks: Database["public"]["Tables"]["tasks"]["Row"][];
 };
 
 export default function ProjectPage() {
@@ -52,7 +53,7 @@ export default function ProjectPage() {
     setProjects,
   } = useProjectStore();
 
-  const project = projects.find((p) => p.slug === params?.slug) as Project;
+  const project = projects.find((p) => p.slug === params?.slug) as ProjectWithTasks;
 
   const {
     createTask,
@@ -116,7 +117,7 @@ export default function ProjectPage() {
       return;
     }
 
-    if (!isInitialLoad && project) {
+    if (!isInitialLoad && project?.id) {
       loadProjectTasks();
     }
   }, [isInitialLoad, project, isLoading, router, loadProjectTasks]);
@@ -164,7 +165,7 @@ export default function ProjectPage() {
     setFilteredTasks(filtered);
   };
 
-  const handleProjectDelete = (e: React.MouseEvent) => {
+  const handleProjectDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
     setIsDeleteModalOpen(true);
   };
@@ -176,8 +177,9 @@ export default function ProjectPage() {
       await deleteProject(project.id);
       toast.success("Project deleted successfully");
       router.push("/projects");
-    } catch (error) {
-      toast.error("Failed to delete project");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete project");
+      setIsDeleteModalOpen(false);
     }
   };
 
@@ -193,15 +195,54 @@ export default function ProjectPage() {
     }
   };
 
-  if (isInitialLoad || isLoading) return <LoadingSpinner />;
-  if (error) return <div className="text-destructive">Error: {error}</div>;
-  if (!project) return <LoadingSpinner />;
+  if (isInitialLoad || isLoading) {
+    return (
+      <div className="p-6">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-muted-foreground">Loading project...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-destructive">Error: {error}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="p-6">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-muted-foreground">Project not found</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{project.name}</h1>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-2xl font-bold">{project.name}</h1>
+            {project.status && (
+              <Badge
+                className="capitalize"
+                style={{
+                  backgroundColor: project.status.color,
+                  color: 'white'
+                }}
+              >
+                {project.status.name}
+              </Badge>
+            )}
+          </div>
           <p className="text-muted-foreground">{project.description}</p>
         </div>
         <div className="flex items-center gap-4">

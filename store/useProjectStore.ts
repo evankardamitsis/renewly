@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { Project, Task } from "@/types/database";
+import { Project } from "@/types/project";
+import { Task } from "@/types/database";
 import { projectsApi, tasksApi } from "@/services/api";
 import { generateSlug } from "@/utils/slug";
 
@@ -36,7 +37,7 @@ export interface CreateProjectInput {
   name: string;
   description?: string | null;
   team_id: string;
-  status?: "Planning" | "In Progress" | "Review" | "Completed";
+  status_id?: string;
   due_date?: string;
 }
 
@@ -79,7 +80,6 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const projectData = {
         ...input,
         slug: generateSlug(input.name),
-        status: input.status || "Planning",
         due_date: input.due_date ||
           new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         tasks: [],
@@ -106,7 +106,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const updated = await projectsApi.update(id, updates);
       if (updated) {
         set((state) => ({
-          projects: state.projects.map((p) => (p.id === id ? updated : p)),
+          projects: state.projects.map((p) => p.id === id ? updated : p),
         }));
       }
     } catch (error) {

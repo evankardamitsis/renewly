@@ -12,13 +12,63 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 
-CREATE SCHEMA IF NOT EXISTS "public";
+CREATE EXTENSION IF NOT EXISTS "pg_cron" WITH SCHEMA "pg_catalog";
 
 
-ALTER SCHEMA "public" OWNER TO "pg_database_owner";
+
+
+
+
+CREATE EXTENSION IF NOT EXISTS "pgsodium" WITH SCHEMA "pgsodium";
+
+
+
+
 
 
 COMMENT ON SCHEMA "public" IS 'standard public schema';
+
+
+
+CREATE EXTENSION IF NOT EXISTS "pg_graphql" WITH SCHEMA "graphql";
+
+
+
+
+
+
+CREATE EXTENSION IF NOT EXISTS "pg_stat_statements" WITH SCHEMA "extensions";
+
+
+
+
+
+
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA "extensions";
+
+
+
+
+
+
+CREATE EXTENSION IF NOT EXISTS "pgjwt" WITH SCHEMA "extensions";
+
+
+
+
+
+
+CREATE EXTENSION IF NOT EXISTS "supabase_vault" WITH SCHEMA "vault";
+
+
+
+
+
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
+
+
+
 
 
 
@@ -313,11 +363,12 @@ CREATE TABLE IF NOT EXISTS "public"."project_files" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "project_id" "uuid",
     "name" "text" NOT NULL,
-    "url" "text" NOT NULL,
     "size" integer NOT NULL,
     "type" "text" NOT NULL,
     "uploaded_by" "uuid",
-    "created_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL
+    "created_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
+    "storage_path" "text" NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
 );
 
 
@@ -342,7 +393,6 @@ CREATE TABLE IF NOT EXISTS "public"."projects" (
     "team_id" "uuid",
     "name" "text" NOT NULL,
     "description" "text",
-    "status" "text" DEFAULT 'Planning'::"text",
     "created_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
     "due_date" timestamp with time zone,
@@ -351,8 +401,7 @@ CREATE TABLE IF NOT EXISTS "public"."projects" (
     "created_by" "uuid",
     "has_board_enabled" boolean DEFAULT false NOT NULL,
     "status_id" "uuid",
-    "owner_id" "uuid",
-    CONSTRAINT "projects_status_check" CHECK (("status" = ANY (ARRAY['Planning'::"text", 'In Progress'::"text", 'Completed'::"text"])))
+    "owner_id" "uuid"
 );
 
 
@@ -545,7 +594,7 @@ CREATE INDEX "idx_projects_search" ON "public"."projects" USING "gin" ("to_tsvec
 
 
 
-CREATE INDEX "idx_projects_team_id_status" ON "public"."projects" USING "btree" ("team_id", "status");
+CREATE INDEX "idx_projects_team_id_status_id" ON "public"."projects" USING "btree" ("team_id", "status_id");
 
 
 
@@ -867,6 +916,13 @@ CREATE POLICY "Users can create teams during onboarding" ON "public"."teams" FOR
 
 
 
+CREATE POLICY "Users can delete project files" ON "public"."project_files" FOR DELETE USING ((EXISTS ( SELECT 1
+   FROM ("public"."team_members" "tm"
+     JOIN "public"."projects" "p" ON (("p"."team_id" = "tm"."team_id")))
+  WHERE (("tm"."user_id" = "auth"."uid"()) AND ("p"."id" = "project_files"."project_id")))));
+
+
+
 CREATE POLICY "Users can delete their own notifications in batch" ON "public"."notifications" FOR DELETE USING (("auth"."uid"() = "user_id"));
 
 
@@ -879,11 +935,25 @@ CREATE POLICY "Users can delete their team's tasks" ON "public"."tasks" FOR DELE
 
 
 
+CREATE POLICY "Users can insert project files" ON "public"."project_files" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM ("public"."team_members" "tm"
+     JOIN "public"."projects" "p" ON (("p"."team_id" = "tm"."team_id")))
+  WHERE (("tm"."user_id" = "auth"."uid"()) AND ("p"."id" = "project_files"."project_id")))));
+
+
+
 CREATE POLICY "Users can update their team's tasks" ON "public"."tasks" USING (("project_id" IN ( SELECT "projects"."id"
    FROM "public"."projects"
   WHERE ("projects"."team_id" IN ( SELECT "team_members"."team_id"
            FROM "public"."team_members"
           WHERE ("team_members"."user_id" = "auth"."uid"()))))));
+
+
+
+CREATE POLICY "Users can view project files" ON "public"."project_files" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM ("public"."team_members" "tm"
+     JOIN "public"."projects" "p" ON (("p"."team_id" = "tm"."team_id")))
+  WHERE (("tm"."user_id" = "auth"."uid"()) AND ("p"."id" = "project_files"."project_id")))));
 
 
 
@@ -971,10 +1041,228 @@ ALTER TABLE "public"."team_members" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."teams" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE PUBLICATION "realtime_messages_publication_v2_34_0" WITH (publish = 'insert, update, delete, truncate');
+
+
+ALTER PUBLICATION "realtime_messages_publication_v2_34_0" OWNER TO "supabase_admin";
+
+
+
+
+ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
+
+
+ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."notifications";
+
+
+
+SET SESSION AUTHORIZATION "postgres";
+RESET SESSION AUTHORIZATION;
+
+
+
 GRANT USAGE ON SCHEMA "public" TO "postgres";
 GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
 GRANT USAGE ON SCHEMA "public" TO "service_role";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1053,6 +1341,27 @@ GRANT ALL ON FUNCTION "public"."mark_all_notifications_read"("p_user_id" "uuid")
 GRANT ALL ON FUNCTION "public"."rollback_transaction"() TO "anon";
 GRANT ALL ON FUNCTION "public"."rollback_transaction"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."rollback_transaction"() TO "service_role";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1140,59 +1449,28 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TAB
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 RESET ALL;
-
--- Create storage bucket for project files
-INSERT INTO storage.buckets (id, name, public) 
-VALUES ('project-files', 'project-files', false);
-
--- Storage policies for project files
-CREATE POLICY "Users can upload project files" ON storage.objects
-FOR INSERT TO authenticated
-WITH CHECK (
-  bucket_id = 'project-files' AND
-  EXISTS (
-    SELECT 1 FROM public.team_members tm
-    JOIN public.projects p ON p.team_id = tm.team_id
-    WHERE tm.user_id = auth.uid()
-    AND (storage.foldername(name))[1] = p.id::text
-  )
-);
-
-CREATE POLICY "Users can view project files" ON storage.objects
-FOR SELECT TO authenticated
-USING (
-  bucket_id = 'project-files' AND
-  EXISTS (
-    SELECT 1 FROM public.team_members tm
-    JOIN public.projects p ON p.team_id = tm.team_id
-    WHERE tm.user_id = auth.uid()
-    AND (storage.foldername(name))[1] = p.id::text
-  )
-);
-
-CREATE POLICY "Users can delete project files" ON storage.objects
-FOR DELETE TO authenticated
-USING (
-  bucket_id = 'project-files' AND
-  EXISTS (
-    SELECT 1 FROM public.team_members tm
-    JOIN public.projects p ON p.team_id = tm.team_id
-    WHERE tm.user_id = auth.uid()
-    AND (storage.foldername(name))[1] = p.id::text
-  )
-);
-
--- Add RLS policy for project_files table
-ALTER TABLE public.project_files ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can manage project files" ON public.project_files
-FOR ALL TO authenticated
-USING (
-  EXISTS (
-    SELECT 1 FROM public.team_members tm
-    JOIN public.projects p ON p.team_id = tm.team_id
-    WHERE tm.user_id = auth.uid()
-    AND p.id = project_id
-  )
-);

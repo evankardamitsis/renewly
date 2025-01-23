@@ -5,7 +5,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Trash, RefreshCw } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Trash, RefreshCw, Pencil } from "lucide-react";
 import { Task } from "@/types/task";
 import { TeamMember, useTeamMembers } from "@/hooks/useTeamMembers";
 import { AssigneeSelect } from "./assignee-select";
@@ -14,14 +17,17 @@ import { createClient } from "@/lib/supabase/client";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { useQueryClient } from "@tanstack/react-query";
 import { addDays, addMonths, addWeeks, addYears, isWithinInterval, subDays, format, formatDistanceToNow } from "date-fns";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TaskDetails } from "./task-details";
+import { tasksApi } from "@/services/api";
 
 interface TaskTableProps {
   tasks: Task[];
   onTaskDelete: (taskId: string) => void;
   onTaskUpdate: () => void;
-  onTaskClick?: (task: Task) => Promise<void>;
 }
+
+type TaskFieldValue = string | number | boolean | null;
 
 const PRIORITY_VARIANTS = {
   low: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
@@ -66,12 +72,16 @@ const isNearDueDate = (dueDate: string | null) => {
   });
 };
 
-export function TaskTable({ tasks, onTaskDelete, onTaskUpdate, onTaskClick }: TaskTableProps) {
+export function TaskTable({ tasks, onTaskDelete, onTaskUpdate }: TaskTableProps) {
   const { teamMembers } = useTeamMembers();
-  const [editingAssignee, setEditingAssignee] = useState<string | null>(null);
+  const [editingCell, setEditingCell] = useState<{ taskId: string; field: string } | null>(null);
+  const [editingValue, setEditingValue] = useState<string>("");
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false);
+  const [selectedTaskForComments, setSelectedTaskForComments] = useState<Task | null>(null);
+  const [isTaskDetailsOpen, setIsTaskDetailsOpen] = useState(false);
+  const [selectedTaskForDetails, setSelectedTaskForDetails] = useState<Task | null>(null);
   const supabase = useMemo(() => createClient(), []);
   const queryClient = useQueryClient();
 
@@ -110,38 +120,56 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate, onTaskClick }: Ta
     }
   }, [onTaskUpdate, supabase, queryClient]);
 
-  const handleAssigneeSelect = async (taskId: string, userId: string | null) => {
+  const handleStartEdit = (taskId: string, field: string, value: string) => {
+    setEditingCell({ taskId, field });
+    setEditingValue(value);
+  };
+
+  const handleSave = async (taskId: string, field: string, value: TaskFieldValue) => {
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ assigned_to: userId })
-        .eq('id', taskId);
+      // Check if this is a custom field
+      const isCustomField = customFieldLabels.includes(field);
 
-      if (error) throw error;
+      if (isCustomField) {
+        // Get current task
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) throw new Error("Task not found");
 
-      // Show success toast
-      const assignee = userId ? teamMembers.find((m: TeamMember) => m.id === userId)?.name : 'no one';
-      toast.success(`Task has been assigned to ${assignee}`);
+        // Update the custom field
+        const updatedFields = task.custom_fields.map(f => ({
+          ...f,
+          value: f.label === field ? String(value) : f.value
+        }));
 
-      // Create notification for the assigned user
-      if (userId) {
-        await supabase
-          .from('notifications')
-          .insert({
-            user_id: userId,
-            type: 'task_assigned',
-            title: 'New Task Assignment',
-            message: `You have been assigned a new task`,
-            task_id: taskId
-          });
+        await tasksApi.updateCustomFields(taskId, updatedFields);
+      } else {
+        // Handle regular field update
+        const { error } = await supabase
+          .from('tasks')
+          .update({
+            [field]: value,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', taskId);
+
+        if (error) throw error;
       }
 
-      // Update local state immediately
+      toast.success("Task updated successfully");
       onTaskUpdate();
-      setEditingAssignee(null);
+      setEditingCell(null);
     } catch (error) {
       console.error('Error updating task:', error);
-      toast.error("Failed to assign task. Please try again.");
+      toast.error("Failed to update task");
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, taskId: string, field: string) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSave(taskId, field, editingValue);
+    } else if (e.key === 'Escape') {
+      setEditingCell(null);
     }
   };
 
@@ -183,12 +211,40 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate, onTaskClick }: Ta
     }
   };
 
-  const handleTaskClick = (task: Task) => {
-    if (onTaskClick) {
-      onTaskClick(task);
-    } else {
-      setSelectedTask(task);
+  const handleCommentsClick = (task: Task) => {
+    setSelectedTaskForComments(task);
+    setIsCommentsModalOpen(true);
+    setEditingValue(String(task.comments || ""));
+  };
+
+  const handleSaveComments = async () => {
+    if (!selectedTaskForComments) return;
+
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          comments: editingValue,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedTaskForComments.id);
+
+      if (error) throw error;
+
+      toast.success("Comments updated successfully");
+      onTaskUpdate();
+      setIsCommentsModalOpen(false);
+      setSelectedTaskForComments(null);
+    } catch (error) {
+      console.error('Error updating comments:', error);
+      toast.error("Failed to update comments");
     }
+  };
+
+  const handleEditClick = (e: React.MouseEvent, task: Task) => {
+    e.stopPropagation();
+    setSelectedTaskForDetails(task);
+    setIsTaskDetailsOpen(true);
   };
 
   return (
@@ -206,29 +262,106 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate, onTaskClick }: Ta
                 <TableHead key={label}>{label}</TableHead>
               ))}
               <TableHead>Assignee</TableHead>
-              <TableHead>Comments</TableHead>
+              <TableHead className="w-[200px]">Comments</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {tasks.map((task) => (
-              <TableRow
-                key={task.id}
-                className="cursor-pointer hover:bg-muted/50"
-                onClick={() => handleTaskClick(task)}
-              >
-                <TableCell>{task.title}</TableCell>
+              <TableRow key={task.id}>
                 <TableCell>
-                  <Badge variant="secondary" className={PRIORITY_VARIANTS[task.priority.toLowerCase() as keyof typeof PRIORITY_VARIANTS]}>
-                    {task.priority}
-                  </Badge>
+                  {editingCell?.taskId === task.id && editingCell.field === 'title' ? (
+                    <Input
+                      value={editingValue}
+                      onChange={(e) => setEditingValue(e.target.value)}
+                      onBlur={() => handleSave(task.id, 'title', editingValue)}
+                      onKeyDown={(e) => handleKeyDown(e, task.id, 'title')}
+                      autoFocus
+                    />
+                  ) : (
+                    <div
+                      className="cursor-pointer hover:bg-muted/50 p-2 rounded"
+                      onClick={() => handleStartEdit(task.id, 'title', task.title)}
+                    >
+                      {task.title}
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell>
-                  <Badge variant="secondary" className={STATUS_VARIANTS[task.status.toLowerCase() as keyof typeof STATUS_VARIANTS]}>
-                    {task.status}
-                  </Badge>
+                  {editingCell?.taskId === task.id && editingCell.field === 'priority' ? (
+                    <Select
+                      value={editingValue}
+                      onValueChange={(value) => {
+                        handleSave(task.id, 'priority', value);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div
+                      className="cursor-pointer"
+                      onClick={() => handleStartEdit(task.id, 'priority', task.priority)}
+                    >
+                      <Badge variant="secondary" className={PRIORITY_VARIANTS[task.priority.toLowerCase() as keyof typeof PRIORITY_VARIANTS]}>
+                        {task.priority}
+                      </Badge>
+                    </div>
+                  )}
                 </TableCell>
-                <TableCell>{task.due_date ? format(new Date(task.due_date), 'MMM d, yyyy') : "Not set"}</TableCell>
+                <TableCell>
+                  {editingCell?.taskId === task.id && editingCell.field === 'status' ? (
+                    <Select
+                      value={editingValue}
+                      onValueChange={(value) => {
+                        handleSave(task.id, 'status', value);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todo">To Do</SelectItem>
+                        <SelectItem value="in-progress">In Progress</SelectItem>
+                        <SelectItem value="done">Done</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div
+                      className="cursor-pointer"
+                      onClick={() => handleStartEdit(task.id, 'status', task.status)}
+                    >
+                      <Badge variant="secondary" className={STATUS_VARIANTS[task.status.toLowerCase() as keyof typeof STATUS_VARIANTS]}>
+                        {task.status}
+                      </Badge>
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {editingCell?.taskId === task.id && editingCell.field === 'due_date' ? (
+                    <Input
+                      type="datetime-local"
+                      value={editingValue}
+                      onChange={(e) => setEditingValue(e.target.value)}
+                      onBlur={() => handleSave(task.id, 'due_date', editingValue)}
+                      onKeyDown={(e) => handleKeyDown(e, task.id, 'due_date')}
+                      autoFocus
+                    />
+                  ) : (
+                    <div
+                      className="cursor-pointer hover:bg-muted/50 p-2 rounded"
+                      onClick={() => handleStartEdit(task.id, 'due_date', task.due_date || "")}
+                    >
+                      {task.due_date ? format(new Date(task.due_date), 'MMM d, yyyy') : "Not set"}
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell>
                   {task.is_recurring ? (
                     <div className="flex items-center gap-2">
@@ -254,23 +387,38 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate, onTaskClick }: Ta
                 </TableCell>
                 {customFieldLabels.map((label) => (
                   <TableCell key={label}>
-                    {Array.isArray(task.custom_fields)
-                      ? task.custom_fields.find((f) => f.label === label)?.value || "-"
-                      : "-"
-                    }
+                    {editingCell?.taskId === task.id && editingCell.field === label ? (
+                      <Input
+                        value={editingValue}
+                        onChange={(e) => setEditingValue(e.target.value)}
+                        onBlur={() => handleSave(task.id, label, editingValue)}
+                        onKeyDown={(e) => handleKeyDown(e, task.id, label)}
+                        autoFocus
+                      />
+                    ) : (
+                      <div
+                        className="cursor-pointer hover:bg-muted/50 p-2 rounded"
+                        onClick={() => handleStartEdit(task.id, label, task.custom_fields.find((f) => f.label === label)?.value || "")}
+                      >
+                        {Array.isArray(task.custom_fields)
+                          ? task.custom_fields.find((f) => f.label === label)?.value || "-"
+                          : "-"
+                        }
+                      </div>
+                    )}
                   </TableCell>
                 ))}
                 <TableCell onClick={(e) => e.stopPropagation()}>
-                  {editingAssignee === task.id ? (
+                  {editingCell?.taskId === task.id && editingCell.field === 'assigned_to' ? (
                     <AssigneeSelect
                       teamMembers={teamMembers}
                       selectedAssigneeId={task.assigned_to}
-                      onAssigneeSelect={(userId) => handleAssigneeSelect(task.id, userId)}
+                      onAssigneeSelect={(userId) => handleSave(task.id, 'assigned_to', userId)}
                     />
                   ) : (
                     <div
                       className="flex items-center gap-2 cursor-pointer hover:bg-accent rounded-md p-1"
-                      onClick={() => setEditingAssignee(task.id)}
+                      onClick={() => handleStartEdit(task.id, 'assigned_to', task.assigned_to || "")}
                     >
                       {task.assigned_to ? (
                         <>
@@ -291,18 +439,36 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate, onTaskClick }: Ta
                     </div>
                   )}
                 </TableCell>
-                <TableCell>{Array.isArray(task.comments) ? task.comments.length : 0}</TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setTaskToDelete(task.id);
-                    }}
+                <TableCell className="w-[200px]">
+                  <div
+                    className="cursor-pointer hover:bg-muted/50 p-2 rounded line-clamp-1 overflow-hidden text-ellipsis"
+                    onClick={() => handleCommentsClick(task)}
                   >
-                    <Trash className="h-4 w-4" />
-                  </Button>
+                    {task.comments || "Add comments"}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => handleEditClick(e, task)}
+                      title="Edit task"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTaskToDelete(task.id);
+                      }}
+                      title="Delete task"
+                    >
+                      <Trash className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -310,14 +476,32 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate, onTaskClick }: Ta
         </Table>
       </div>
 
-      {selectedTask && (
-        <TaskDetails
-          task={selectedTask}
-          isOpen={!!selectedTask}
-          onClose={() => setSelectedTask(null)}
-          onUpdate={onTaskUpdate}
-        />
-      )}
+      <Dialog open={isCommentsModalOpen} onOpenChange={(open) => !open && setIsCommentsModalOpen(false)}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Task Comments</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Comments</label>
+              <Textarea
+                value={editingValue}
+                onChange={(e) => setEditingValue(e.target.value)}
+                className="min-h-[200px]"
+                placeholder="Add your comments here..."
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsCommentsModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveComments}>
+              Save Comments
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmationModal
         open={!!taskToDelete}
@@ -339,6 +523,22 @@ export function TaskTable({ tasks, onTaskDelete, onTaskUpdate, onTaskClick }: Ta
         description="Are you sure you want to delete this task? This action cannot be undone."
         loading={isDeleting}
       />
+
+      {selectedTaskForDetails && (
+        <TaskDetails
+          task={selectedTaskForDetails}
+          isOpen={isTaskDetailsOpen}
+          onClose={() => {
+            setIsTaskDetailsOpen(false);
+            setSelectedTaskForDetails(null);
+          }}
+          onUpdate={() => {
+            onTaskUpdate();
+            setIsTaskDetailsOpen(false);
+            setSelectedTaskForDetails(null);
+          }}
+        />
+      )}
     </>
   );
 }

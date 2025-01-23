@@ -263,12 +263,18 @@ export type Project = Database["public"]["Tables"]["projects"]["Row"];
 export type Task = Database["public"]["Tables"]["tasks"]["Row"];
 
 export type NotificationType =
-  | "DUE_DATE_APPROACHING"
   | "TASK_ASSIGNED"
-  | "TASK_COMPLETED"
   | "TASK_UPDATED"
+  | "PROJECT_STATUS_CHANGED"
   | "PROJECT_CREATED"
-  | "TEAM_MEMBER_ADDED"
+  | "PROJECT_UPDATED"
+  | "PROJECT_DELETED"
+  | "COMMENT_ADDED"
+  | "COMMENT_UPDATED"
+  | "COMMENT_DELETED"
+  | "MENTION"
+  | "DUE_DATE_APPROACHING"
+  | "TASK_COMPLETED"
   | "DUE_DATE"
   | "TASK_OVERDUE"
   | "TEST_EMAIL";
@@ -284,4 +290,42 @@ export interface Notification {
   project_id?: string;
   read: boolean;
   action_url?: string;
+}
+
+export interface ProjectStatus {
+  id: string;
+  name: string;
+  color: string;
+  description?: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  full_name?: string | null;
+  avatar_url?: string | null;
+  created_at: string;
+}
+
+export interface ProjectStatusTransition {
+  id: string;
+  from_status_id: string | null;
+  to_status_id: string;
+  project_id: string;
+  user_id: string;
+  comment?: string | null;
+  created_at: string;
+}
+
+export interface ProjectStatusHistory {
+  id: string;
+  project_id: string;
+  status_id: string;
+  user_id: string;
+  comment?: string | null;
+  created_at: string;
+  status: ProjectStatus;
+  user: User;
 }

@@ -1,13 +1,24 @@
 import { createClient } from "@/lib/supabase/client";
-import { Notification } from "@/types/database";
+import { Notification, NotificationType } from "@/types/database";
 
 const supabase = createClient();
 const BATCH_SIZE = 50; // Maximum number of operations to batch together
 
+interface CreateNotificationData {
+    userId: string;
+    type: NotificationType;
+    title: string;
+    message: string;
+    projectId?: string;
+    taskId?: string;
+    actionUrl?: string;
+    metadata?: Record<string, unknown>;
+}
+
 export const notificationsApi = {
     async getUnreadNotifications(
         userId: string,
-        signal?: AbortSignal
+        signal?: AbortSignal,
     ): Promise<Notification[]> {
         const query = supabase
             .from("notifications")
@@ -28,7 +39,7 @@ export const notificationsApi = {
         userId: string,
         page: number,
         limit: number,
-        offset?: number
+        offset?: number,
     ): Promise<{ notifications: Notification[]; hasMore: boolean }> {
         const query = supabase
             .from("notifications")
@@ -36,27 +47,27 @@ export const notificationsApi = {
                 count: "exact",
             })
             .eq("user_id", userId)
-            .order("created_at", { ascending: false })
+            .order("created_at", { ascending: false });
 
         // If offset is provided, use it; otherwise, calculate from page
-        const calculatedOffset = offset ?? (page - 1) * limit
-        query.range(calculatedOffset, calculatedOffset + limit - 1)
+        const calculatedOffset = offset ?? (page - 1) * limit;
+        query.range(calculatedOffset, calculatedOffset + limit - 1);
 
-        const { data, error, count } = await query
+        const { data, error, count } = await query;
 
-        if (error) throw error
+        if (error) throw error;
 
-        const hasMore = count ? count > calculatedOffset + limit : false
+        const hasMore = count ? count > calculatedOffset + limit : false;
 
         return {
             notifications: data as Notification[],
             hasMore,
-        }
+        };
     },
 
     async markAsRead(
         notificationId: string,
-        signal?: AbortSignal
+        signal?: AbortSignal,
     ): Promise<void> {
         const query = supabase
             .from("notifications")
@@ -72,11 +83,11 @@ export const notificationsApi = {
 
     async markAllAsRead(
         userId: string,
-        signal?: AbortSignal
+        signal?: AbortSignal,
     ): Promise<void> {
         const query = supabase
             .rpc("mark_all_notifications_read", {
-                p_user_id: userId
+                p_user_id: userId,
             });
 
         if (signal) query.abortSignal(signal);
@@ -110,12 +121,12 @@ export const notificationsApi = {
     async deleteNotification(
         notificationId: string,
         userId: string,
-        signal?: AbortSignal
+        signal?: AbortSignal,
     ): Promise<void> {
         const query = supabase
             .rpc("delete_notification", {
                 p_notification_id: notificationId,
-                p_user_id: userId
+                p_user_id: userId,
             });
 
         if (signal) query.abortSignal(signal);
@@ -127,11 +138,11 @@ export const notificationsApi = {
 
     async deleteAllNotifications(
         userId: string,
-        signal?: AbortSignal
+        signal?: AbortSignal,
     ): Promise<void> {
         const query = supabase
             .rpc("delete_all_notifications", {
-                p_user_id: userId
+                p_user_id: userId,
             });
 
         if (signal) query.abortSignal(signal);
@@ -143,7 +154,7 @@ export const notificationsApi = {
 
     async markMultipleAsRead(
         notificationIds: string[],
-        signal?: AbortSignal
+        signal?: AbortSignal,
     ): Promise<void> {
         // Split into batches if needed
         for (let i = 0; i < notificationIds.length; i += BATCH_SIZE) {
@@ -163,7 +174,7 @@ export const notificationsApi = {
     async deleteMultiple(
         notificationIds: string[],
         userId: string,
-        signal?: AbortSignal
+        signal?: AbortSignal,
     ): Promise<void> {
         // Split into batches if needed
         for (let i = 0; i < notificationIds.length; i += BATCH_SIZE) {
@@ -171,7 +182,7 @@ export const notificationsApi = {
             const query = supabase
                 .rpc("delete_multiple_notifications", {
                     p_notification_ids: batch,
-                    p_user_id: userId
+                    p_user_id: userId,
                 });
 
             if (signal) query.abortSignal(signal);
@@ -179,5 +190,31 @@ export const notificationsApi = {
             const { error } = await query;
             if (error) throw error;
         }
+    },
+
+    async createNotification(
+        data: CreateNotificationData,
+        signal?: AbortSignal,
+    ) {
+        const supabase = createClient();
+        const query = supabase
+            .from("notifications")
+            .insert([{
+                user_id: data.userId,
+                type: data.type,
+                title: data.title,
+                message: data.message,
+                project_id: data.projectId,
+                task_id: data.taskId,
+                action_url: data.actionUrl,
+                metadata: data.metadata,
+                created_at: new Date().toISOString(),
+                read: false,
+            }]);
+
+        if (signal) query.abortSignal(signal);
+        const { error } = await query;
+
+        if (error) throw error;
     },
 };

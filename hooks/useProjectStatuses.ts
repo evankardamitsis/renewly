@@ -37,7 +37,7 @@ export function useProjectStatuses() {
     const queryClient = useQueryClient();
 
     const statusesQuery = useQuery({
-        queryKey: queryKeys.projects.statuses(),
+        queryKey: queryKeys.projects.getStatuses(),
         queryFn: getProjectStatuses,
         staleTime: 5 * 60 * 1000, // 5 minutes
         gcTime: 10 * 60 * 1000, // 10 minutes
@@ -59,7 +59,7 @@ export function useProjectStatuses() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({
-                queryKey: queryKeys.projects.statuses(),
+                queryKey: queryKeys.projects.getStatuses(),
             });
             toast.success("Status created successfully");
         },
@@ -88,7 +88,7 @@ export function useProjectStatuses() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({
-                queryKey: queryKeys.projects.statuses(),
+                queryKey: queryKeys.projects.getStatuses(),
             });
             toast.success("Status updated successfully");
         },
@@ -112,7 +112,7 @@ export function useProjectStatuses() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({
-                queryKey: queryKeys.projects.statuses(),
+                queryKey: queryKeys.projects.getStatuses(),
             });
             toast.success("Status deleted successfully");
         },
@@ -141,7 +141,7 @@ export function useProjectStatuses() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({
-                queryKey: queryKeys.projects.statuses(),
+                queryKey: queryKeys.projects.getStatuses(),
             });
         },
         onError: (error) => {

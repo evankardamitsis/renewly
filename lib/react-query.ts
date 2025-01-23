@@ -12,35 +12,82 @@ import {
     uploadProjectFile,
 } from "./services/project-files";
 
-// Key factories for consistent query keys
-export const queryKeys = {
+type ProjectQueryKey =
+    | readonly ["projects", string]
+    | readonly ["projects", string, "active"]
+    | readonly ["projects", "detail", string]
+    | readonly ["projects", "files", string]
+    | readonly ["projects", "file", string]
+    | readonly ["projects", string, "files"]
+    | readonly ["projects", "statuses"]
+    | readonly ["projects", string, "status-history"]
+    | readonly ["projects", string, "status-transitions"];
+
+type NotificationQueryKey =
+    | readonly ["notifications", string]
+    | readonly ["notifications", string, "infinite"]
+    | readonly ["notifications", string, "unread"];
+
+type AuthQueryKey = readonly ["auth", "profile", string];
+
+type TeamQueryKey =
+    | readonly ["teams", "detail", string]
+    | readonly ["teams", "members", string];
+
+export const queryKeys: {
+    projects: {
+        all: (teamId: string) => ProjectQueryKey;
+        active: (teamId: string) => ProjectQueryKey;
+        byId: (projectId: string) => ProjectQueryKey;
+        files: (projectId: string) => ProjectQueryKey;
+        file: (fileId: string) => ProjectQueryKey;
+        getFiles: (projectId: string) => ProjectQueryKey;
+        getStatuses: () => ProjectQueryKey;
+        statusHistory: (projectId: string) => ProjectQueryKey;
+        statusTransitions: (projectId: string) => ProjectQueryKey;
+    };
+    notifications: {
+        all: (userId: string) => NotificationQueryKey;
+        infinite: (userId: string) => NotificationQueryKey;
+        unread: (userId: string) => NotificationQueryKey;
+    };
     auth: {
-        user: () => ["auth", "user"] as const,
-        profile: (userId: string) => ["auth", "profile", userId] as const,
-        teamMember: (userId: string, teamId: string) =>
-            ["auth", "teamMember", userId, teamId] as const,
-    },
+        profile: (userId: string) => AuthQueryKey;
+    };
     teams: {
-        all: () => ["teams"] as const,
-        byId: (teamId: string) => ["teams", teamId] as const,
-        members: (teamId: string) => ["teams", teamId, "members"] as const,
-    },
+        byId: (teamId: string) => TeamQueryKey;
+        members: (teamId: string) => TeamQueryKey;
+    };
+} = {
     projects: {
         all: (teamId: string) => ["projects", teamId] as const,
         active: (teamId: string) => ["projects", teamId, "active"] as const,
         byId: (projectId: string) => ["projects", "detail", projectId] as const,
-        files: (projectId: string) => ["projects", projectId, "files"] as const,
-        file: (fileId: string) => ["projects", "files", fileId] as const,
-        statuses: () => ["projects", "statuses"] as const,
+        files: (projectId: string) => ["projects", "files", projectId] as const,
+        file: (fileId: string) => ["projects", "file", fileId] as const,
+        getFiles: (projectId: string) =>
+            ["projects", projectId, "files"] as const,
+        getStatuses: () => ["projects", "statuses"] as const,
+        statusHistory: (projectId: string) =>
+            ["projects", projectId, "status-history"] as const,
+        statusTransitions: (projectId: string) =>
+            ["projects", projectId, "status-transitions"] as const,
     },
     notifications: {
         all: (userId: string) => ["notifications", userId] as const,
-        unread: (userId: string) =>
-            ["notifications", userId, "unread"] as const,
         infinite: (userId: string) =>
             ["notifications", userId, "infinite"] as const,
+        unread: (userId: string) =>
+            ["notifications", userId, "unread"] as const,
     },
-} as const;
+    auth: {
+        profile: (userId: string) => ["auth", "profile", userId] as const,
+    },
+    teams: {
+        byId: (teamId: string) => ["teams", "detail", teamId] as const,
+        members: (teamId: string) => ["teams", "members", teamId] as const,
+    },
+};
 
 // Default stale time for queries (5 minutes)
 const DEFAULT_STALE_TIME = 5 * 60 * 1000;

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Project, Task } from "@/types/database";
+import { CustomField, Project, Task } from "@/types/database";
 import { sendTeamInvite } from "@/app/actions/auth";
 
 const supabase = createClient();
@@ -282,6 +282,35 @@ export const tasksApi = {
 
       if (error) throw error;
       return data as Task[];
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+
+  updateCustomFields: async (
+    taskId: string,
+    customFields: CustomField[],
+  ): Promise<Task> => {
+    try {
+      // Validate custom fields structure
+      const validatedFields = customFields.map((field) => ({
+        type: "string" as const,
+        label: field.label,
+        value: String(field.value || ""),
+      }));
+
+      const { data: task, error } = await supabase
+        .from("tasks")
+        .update({
+          custom_fields: validatedFields,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", taskId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return task;
     } catch (error) {
       return handleError(error);
     }

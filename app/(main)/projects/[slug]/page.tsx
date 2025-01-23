@@ -28,7 +28,9 @@ import { Database } from "@/types/database";
 import { ProjectFiles } from "@/components/projects/project-files";
 import { Badge } from "@/components/ui/badge";
 import { Project } from "@/types/project";
-
+import { ProjectStatusDialog } from "@/components/projects/project-status-dialog";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { TaskDetails } from "@/components/tasks/task-details";
 type ProjectWithTasks = Project & {
   tasks: Database["public"]["Tables"]["tasks"]["Row"][];
 };
@@ -37,11 +39,11 @@ export default function ProjectPage() {
   const params = useParams();
   const router = useRouter();
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Database["public"]["Tables"]["tasks"]["Row"] | null>(null);
   const [filteredTasks, setFilteredTasks] = useState<Database["public"]["Tables"]["tasks"]["Row"][]>([]);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const supabase = createClient();
-  const [selectedTab, setSelectedTab] = useState<string>("table");
 
   const {
     projects,
@@ -57,7 +59,6 @@ export default function ProjectPage() {
 
   const {
     createTask,
-    updateTask: handleTaskUpdate,
     isCreating,
   } = useTaskActions();
 
@@ -134,21 +135,6 @@ export default function ProjectPage() {
       setIsTaskModalOpen(false);
       setFilteredTasks((prev) => [...prev, result.task!]);
       await loadProjectTasks();
-    }
-  };
-
-  const handleTaskClick = async (updatedTask: Database["public"]["Tables"]["tasks"]["Row"]) => {
-    if (!project) return;
-
-    const { task: updatedTaskResult } = await handleTaskUpdate(
-      updatedTask.id,
-      updatedTask
-    );
-
-    if (updatedTaskResult) {
-      setFilteredTasks((prev) =>
-        prev.map((t) => (t.id === updatedTaskResult.id ? updatedTaskResult : t))
-      );
     }
   };
 
@@ -281,21 +267,20 @@ export default function ProjectPage() {
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <div className="flex-1">
-            <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-              <div className="flex items-center justify-between mb-4">
+            <Tabs defaultValue="tasks" className="space-y-4">
+              <div className="flex items-center justify-between">
                 <TabsList>
-                  <TabsTrigger value="table">Table</TabsTrigger>
-                  {project.has_board_enabled && (
-                    <TabsTrigger value="board">Board</TabsTrigger>
-                  )}
+                  <TabsTrigger value="tasks">Tasks</TabsTrigger>
+                  <TabsTrigger value="board" disabled={!project.has_board_enabled}>
+                    Board
+                  </TabsTrigger>
                   <TabsTrigger value="files">Files</TabsTrigger>
+                  <TabsTrigger value="settings">Settings</TabsTrigger>
                 </TabsList>
                 <div className="flex items-center gap-2">
-                  <Label htmlFor="enable-board" className="text-sm text-muted-foreground">
-                    Enable Board View
-                  </Label>
+                  <Label htmlFor="board-view" className="text-sm">Enable Board View</Label>
                   <Switch
-                    id="enable-board"
+                    id="board-view"
                     checked={project.has_board_enabled}
                     onCheckedChange={async (checked) => {
                       const { error } = await supabase
@@ -318,34 +303,49 @@ export default function ProjectPage() {
                       );
                       setProjects(updatedProjects);
 
-                      // Switch to table view if board is disabled
-                      if (!checked && selectedTab === "board") {
-                        setSelectedTab("table");
-                      }
-
                       toast.success(checked ? "Board view enabled" : "Board view disabled");
                     }}
                   />
                 </div>
               </div>
 
-              <TabsContent value="table">
+              <TabsContent value="tasks" className="space-y-4">
+                <TaskFilters onSortChange={() => { }} onFilterChange={() => { }} />
                 <TaskTable
                   tasks={filteredTasks}
                   onTaskDelete={handleTaskDelete}
                   onTaskUpdate={loadProjectTasks}
                 />
               </TabsContent>
-              {project.has_board_enabled && (
-                <TabsContent value="board">
-                  <TaskBoard
-                    tasks={filteredTasks}
-                    onTaskClick={handleTaskClick}
-                  />
-                </TabsContent>
-              )}
+
+              <TabsContent value="board">
+                <TaskBoard
+                  tasks={filteredTasks}
+                  onTaskClick={async (task) => {
+                    setSelectedTask(task);
+                    return Promise.resolve();
+                  }}
+                />
+              </TabsContent>
+
               <TabsContent value="files">
                 <ProjectFiles projectId={project.id} />
+              </TabsContent>
+
+              <TabsContent value="settings">
+                <div className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Project Statuses</CardTitle>
+                      <CardDescription>
+                        Manage and customize project status options
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ProjectStatusDialog />
+                    </CardContent>
+                  </Card>
+                </div>
               </TabsContent>
             </Tabs>
           </div>
@@ -360,12 +360,24 @@ export default function ProjectPage() {
         projectId={project.id}
       />
 
+      {selectedTask && (
+        <TaskDetails
+          task={selectedTask}
+          isOpen={!!selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onUpdate={() => {
+            loadProjectTasks();
+            setSelectedTask(null);
+          }}
+        />
+      )}
+
       <ConfirmationModal
-        open={isDeleteModalOpen}
+        open={!!isDeleteModalOpen}
         onOpenChange={setIsDeleteModalOpen}
-        onConfirm={handleConfirmDelete}
         title="Delete Project"
         description="Are you sure you want to delete this project? This action cannot be undone."
+        onConfirm={handleConfirmDelete}
       />
     </div>
   );
